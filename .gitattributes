@@ -1,0 +1,11 @@
+# The CI runner is Linux: gradlew must keep LF endings or it fails to execute
+# with "bad interpreter". Binaries must never be line-ending converted.
+* text=auto eol=lf
+
+gradlew text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+
+*.png binary
+*.jar binary
+*.keystore binary

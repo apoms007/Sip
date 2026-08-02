@@ -1,0 +1,14 @@
+{
+  "appId": "com.mochisip.app",
+  "appName": "Sip",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_sip",
+      "iconColor": "#FF4D7E"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "sip",
+  "version": "1.0.0",
+  "description": "A tiny hydration companion app. Log what you drink, watch the bottle fill, and Mochi the cat reacts — she perks up when you drink, droops when you forget, and throws confetti when you hit your daily goal. Streaks unlock bows, hats and scenes to dress her in.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/local-notifications": "^6.1.3"
+  }
+}

@@ -403,7 +403,7 @@ function render(opts) {
 
   renderWardrobe(stats);
   renderChart(weekBars(totals));
-  $("notifCard").classList.toggle("hidden", !("Notification" in window) || Notification.permission === "granted");
+  $("notifCard").classList.toggle("hidden", notifSettled());
 }
 
 // Bows all share the 🎀 glyph, so draw a real swatch in the item's own colour —
@@ -462,6 +462,7 @@ function logDrink(amount) {
   playPop();
   sparkle();
   render({ react: true });
+  if (NATIVE) scheduleNative();          // push the next alarm out from this drink
   const after = todayTotal();
   if (after >= state.goalMl && before < state.goalMl && state.celebratedOn !== dayKey(Date.now())) {
     state.celebratedOn = dayKey(Date.now());
@@ -607,13 +608,149 @@ function initSettings() {
     saveState();
     $("settings").classList.add("hidden");
     render({ rebuildBottle: true });
+    if (NATIVE) scheduleNative();          // active hours / goal may have moved
   });
   $("celebrateClose").addEventListener("click", () => $("celebrate").classList.add("hidden"));
+}
+
+/* ------------------------------------------------- native notifications */
+// In the Android build we hand the reminders to the OS alarm scheduler, which
+// fires at a real time whether or not the app is running. The browser build
+// can only poll while open — Chrome's periodic sync is best-effort and may
+// never run — so the two paths are deliberately kept separate.
+const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+let nativeGranted = false;
+
+function LN() {
+  const C = window.Capacitor;
+  return C && C.Plugins && C.Plugins.LocalNotifications;
+}
+
+function notifSettled() {
+  if (NATIVE) return nativeGranted;
+  return !("Notification" in window) || Notification.permission === "granted";
+}
+
+// Push a moment into her waking window: too early waits for activeStart, too
+// late rolls to the next morning.
+function clampToActive(d) {
+  if (d.getHours() < state.activeStart) { d.setHours(state.activeStart, 0, 0, 0); return d; }
+  if (d.getHours() >= state.activeEnd) {
+    d.setDate(d.getDate() + 1);
+    d.setHours(state.activeStart, 0, 0, 0);
+  }
+  return d;
+}
+
+// Each slot is measured from the previous *clamped* one, so a nudge that gets
+// pushed to the next morning doesn't drag the following two on top of it — she
+// would wake to three notifications stacked at 08:00.
+function reminderSlots() {
+  const out = [];
+  let t;
+  if (todayTotal() >= state.goalMl) {
+    // Goal already met: stay quiet until tomorrow morning.
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(state.activeStart, 0, 0, 0);
+    out.push(d);
+    t = d.getTime();
+  } else {
+    t = Math.max(lastLogTs() || 0, Date.now());
+  }
+  while (out.length < 3) {
+    const d = clampToActive(new Date(t + REMINDER_GAP_MS));
+    out.push(d);
+    t = d.getTime();
+  }
+  return out;
+}
+
+async function scheduleNative() {
+  const ln = LN();
+  if (!ln || !nativeGranted) return;
+  try {
+    await ln.cancel({ notifications: [{ id: 101 }, { id: 102 }, { id: 103 }, { id: 104 }] });
+    const slots = reminderSlots();
+    await ln.schedule({
+      notifications: slots.map((at, i) => ({
+        id: 101 + i,
+        title: "Mochi says 🎀",
+        body: line(NUDGES[i]),
+        actionTypeId: "SIP_REMIND",
+        schedule: { at, allowWhileIdle: true },
+        smallIcon: "ic_stat_sip",
+      })),
+    });
+  } catch (e) { /* scheduling is best-effort; the app still works without it */ }
+}
+
+async function snoozeNative(mins) {
+  const ln = LN();
+  if (!ln) return;
+  try {
+    await ln.cancel({ notifications: [{ id: 101 }, { id: 102 }, { id: 103 }, { id: 104 }] });
+    await ln.schedule({
+      notifications: [{
+        id: 104,
+        title: "Mochi says 🎀",
+        body: line(NUDGES[0]),
+        actionTypeId: "SIP_REMIND",
+        schedule: { at: new Date(Date.now() + mins * 60000), allowWhileIdle: true },
+        smallIcon: "ic_stat_sip",
+      }],
+    });
+    showToast("Okay! Mochi wiww wait " + mins + " min 🎀");
+  } catch (e) {}
+}
+
+async function initNative() {
+  const ln = LN();
+  if (!ln) return;
+  try {
+    const perm = await ln.checkPermissions();
+    nativeGranted = perm.display === "granted";
+
+    await ln.registerActionTypes({
+      types: [{
+        id: "SIP_REMIND",
+        actions: [
+          { id: "sip250", title: "+250ml" },
+          { id: "sip500", title: "+500ml" },
+          { id: "snooze", title: "Snooze 20m" },
+        ],
+      }],
+    });
+
+    ln.addListener("localNotificationActionPerformed", ev => {
+      const a = ev && ev.actionId;
+      if (a === "sip250") logDrink(250);
+      else if (a === "sip500") logDrink(500);
+      else if (a === "snooze") snoozeNative(20);
+      else render();
+    });
+
+    if (nativeGranted) scheduleNative();
+  } catch (e) {}
 }
 
 /* ------------------------------------------------------- notifications */
 function initNotifications() {
   $("notifBtn").addEventListener("click", async () => {
+    if (NATIVE) {
+      const ln = LN();
+      if (!ln) { showToast("Wemindews awen't avaiwabwe hewe."); return; }
+      const res = await ln.requestPermissions();
+      nativeGranted = res.display === "granted";
+      if (nativeGranted) {
+        showToast("Yay! Mochi wiww wemind you 🎀");
+        $("notifCard").classList.add("hidden");
+        scheduleNative();
+      } else {
+        showToast("Mochi needs notification pewmission 🥺");
+      }
+      return;
+    }
     if (!("Notification" in window)) { showToast("Notifications awen't suppowted hewe."); return; }
     const perm = await Notification.requestPermission();
     if (perm === "granted") {
@@ -622,9 +759,12 @@ function initNotifications() {
       tryPeriodicSync();
     }
   });
-  setInterval(checkReminder, 60 * 1000);
+
+  if (NATIVE) initNative();
+  else setInterval(checkReminder, 60 * 1000);
+
   setInterval(() => render({ keepLine: true }), 5 * 60 * 1000);  // mood decays over time
-  checkReminder();
+  if (!NATIVE) checkReminder();
 }
 
 function checkReminder() {

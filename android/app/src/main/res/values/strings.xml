@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sip</string>
+    <string name="title_activity_main">Sip</string>
+    <string name="package_name">com.mochisip.app</string>
+    <string name="custom_url_scheme">com.mochisip.app</string>
+</resources>
