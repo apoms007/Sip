@@ -17,7 +17,7 @@ function defaultState() {
     log: [], lastNotified: 0, bestStreak: 0,
     unlocked: ["bow_red", "hat_none", "bg_plain"],
     equipped: { bow: "bow_red", hat: "hat_none", bg: "bg_plain" },
-    sound: true, onboarded: false, celebratedOn: null,
+    sound: true, onboarded: false, celebratedOn: null, nextNudgeAt: 0,
   };
 }
 
@@ -458,6 +458,7 @@ function logDrink(amount) {
   state.log.push({ ts: Date.now(), amount });
   if (state.log.length > 5000) state.log = state.log.slice(-5000);
   state.lastNotified = Date.now();
+  state.nextNudgeAt = 0;                 // a real drink outranks any snooze
   saveState();
   playPop();
   sparkle();
@@ -642,13 +643,27 @@ function clampToActive(d) {
   return d;
 }
 
-// Each slot is measured from the previous *clamped* one, so a nudge that gets
-// pushed to the next morning doesn't drag the following two on top of it — she
-// would wake to three notifications stacked at 08:00.
+// Queue a rolling week of alarms rather than the next few. Android only fires
+// what has been scheduled, and nothing reschedules unless she opens the app or
+// taps a notification — with a short queue the app goes permanently silent
+// after the last one, which is exactly the failure this is meant to prevent.
+const QUEUE_DAYS = 7;
+const MAX_QUEUED = 64;      // ~9/day over a 14h window; well inside Android's budget
+
+// Each slot is measured from the previous *clamped* one, so a nudge pushed past
+// her active window doesn't drag the following ones on top of it — a narrow
+// window used to stack them all on one morning.
 function reminderSlots() {
   const out = [];
+  const horizon = Date.now() + QUEUE_DAYS * 86400000;
   let t;
-  if (todayTotal() >= state.goalMl) {
+
+  if (state.nextNudgeAt && state.nextNudgeAt > Date.now()) {
+    // Snoozed: honour the requested moment, then resume the normal rhythm.
+    const d = clampToActive(new Date(state.nextNudgeAt));
+    out.push(d);
+    t = d.getTime();
+  } else if (todayTotal() >= state.goalMl) {
     // Goal already met: stay quiet until tomorrow morning.
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -658,25 +673,49 @@ function reminderSlots() {
   } else {
     t = Math.max(lastLogTs() || 0, Date.now());
   }
-  while (out.length < 3) {
+
+  while (out.length < MAX_QUEUED) {
     const d = clampToActive(new Date(t + REMINDER_GAP_MS));
+    if (d.getTime() > horizon) break;
     out.push(d);
     t = d.getTime();
   }
   return out;
 }
 
+// Escalation restarts each morning: waking up to "MOCHI IS DYING OF THIRST"
+// on day five of a pre-built queue would be absurd.
+function slotBodies(slots) {
+  let day = null, idx = 0;
+  return slots.map(d => {
+    const k = d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate();
+    if (k !== day) { day = k; idx = 0; } else idx++;
+    return line(NUDGES[Math.min(2, idx)]);
+  });
+}
+
+// Clear by asking the OS what is actually pending, so ids left over from an
+// older build or a longer queue are never orphaned.
+async function cancelPendingNative(ln) {
+  try {
+    const pending = await ln.getPending();
+    const list = pending && pending.notifications;
+    if (list && list.length) await ln.cancel({ notifications: list.map(n => ({ id: n.id })) });
+  } catch (e) {}
+}
+
 async function scheduleNative() {
   const ln = LN();
   if (!ln || !nativeGranted) return;
   try {
-    await ln.cancel({ notifications: [{ id: 101 }, { id: 102 }, { id: 103 }, { id: 104 }] });
+    await cancelPendingNative(ln);
     const slots = reminderSlots();
+    const bodies = slotBodies(slots);
     await ln.schedule({
       notifications: slots.map((at, i) => ({
-        id: 101 + i,
+        id: 1000 + i,
         title: "Mochi says 🎀",
-        body: line(NUDGES[i]),
+        body: bodies[i],
         actionTypeId: "SIP_REMIND",
         schedule: { at, allowWhileIdle: true },
         smallIcon: "ic_stat_sip",
@@ -686,22 +725,12 @@ async function scheduleNative() {
 }
 
 async function snoozeNative(mins) {
-  const ln = LN();
-  if (!ln) return;
-  try {
-    await ln.cancel({ notifications: [{ id: 101 }, { id: 102 }, { id: 103 }, { id: 104 }] });
-    await ln.schedule({
-      notifications: [{
-        id: 104,
-        title: "Mochi says 🎀",
-        body: line(NUDGES[0]),
-        actionTypeId: "SIP_REMIND",
-        schedule: { at: new Date(Date.now() + mins * 60000), allowWhileIdle: true },
-        smallIcon: "ic_stat_sip",
-      }],
-    });
-    showToast("Okay! Mochi wiww wait " + mins + " min 🎀");
-  } catch (e) {}
+  // Rebuild the whole queue off the snoozed moment — scheduling a single
+  // notification would leave nothing queued behind it.
+  state.nextNudgeAt = Date.now() + mins * 60000;
+  saveState();
+  await scheduleNative();
+  showToast("Okay! Mochi wiww wait " + mins + " min 🎀");
 }
 
 async function initNative() {

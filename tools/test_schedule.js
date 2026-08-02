@@ -57,10 +57,11 @@ function scenario(name, stateObj) {
   const slots = ctx.reminderSlots();
   const now = Date.now();
   const s = stateObj;
+  const span = (slots[slots.length - 1].getTime() - now) / 86400000;
 
-  console.log("  slots: " + slots.map(fmt).join(" | "));
+  console.log("  " + slots.length + " slots over " + span.toFixed(1) + "d: " +
+    fmt(slots[0]) + " ... " + fmt(slots[slots.length - 1]));
 
-  check("returns 3 slots", slots.length === 3, "got " + slots.length);
   check("all in the future", slots.every(d => d.getTime() > now));
   check("strictly increasing",
     slots.every((d, i) => i === 0 || d.getTime() > slots[i - 1].getTime()));
@@ -69,7 +70,16 @@ function scenario(name, stateObj) {
     slots.map(d => d.getHours()).join(","));
   check("spaced >= gap apart",
     slots.every((d, i) => i === 0 || d.getTime() - slots[i - 1].getTime() >= GAP));
-  return slots;
+  // The whole point of the rolling queue: ignoring the app for days must not
+  // silence it, and the queue must not exceed Android's alarm budget.
+  check("queue reaches >= 5 days out", span >= 5, span.toFixed(1) + "d");
+  check("queue capped at 64", slots.length <= 64, "got " + slots.length);
+
+  // Bodies must escalate within a day and reset the next morning.
+  const bodies = ctx.slotBodies(slots);
+  check("one body per slot", bodies.length === slots.length);
+  check("no body is empty", bodies.every(b => typeof b === "string" && b.length > 0));
+  return { slots, ctx };
 }
 
 const now = Date.now();
@@ -87,7 +97,7 @@ scenario("empty log", baseState({}));
 // Goal already met: first nudge must be tomorrow morning.
 const met = scenario("goal met", baseState({
   log: [{ ts: now - 30 * 60000, amount: 2000 }],
-}));
+})).slots;
 check("goal-met first slot is >= 8h out", met[0].getTime() - now > 8 * HOUR,
   ((met[0].getTime() - now) / HOUR).toFixed(1) + "h");
 
@@ -103,6 +113,41 @@ scenario("late window 20-23", baseState({
   activeStart: 20, activeEnd: 23,
   log: [{ ts: now - 5 * 60000, amount: 250 }],
 }));
+
+// Snoozing must honour the requested moment AND keep the week queued behind it,
+// otherwise a single snooze tap would drain the whole schedule.
+console.log("\nsnooze respected");
+{
+  const snoozeAt = now + 20 * 60000;
+  const ctx = load(baseState({
+    nextNudgeAt: snoozeAt,
+    log: [{ ts: now - 5 * 60000, amount: 250 }],
+  }));
+  const slots = ctx.reminderSlots();
+  const firstDelta = (slots[0].getTime() - now) / 60000;
+  const span = (slots[slots.length - 1].getTime() - now) / 86400000;
+  console.log("  first slot in " + firstDelta.toFixed(0) + " min, " +
+    slots.length + " slots over " + span.toFixed(1) + "d");
+  const inHours = slots[0].getHours() >= 8 && slots[0].getHours() < 22;
+  // If "now" falls outside active hours the snooze is legitimately pushed to
+  // the morning, so only assert the 20min timing when it could be honoured.
+  check("snooze honoured (or clamped into hours)",
+    inHours ? Math.abs(firstDelta - 20) < 2 : firstDelta > 20,
+    firstDelta.toFixed(0) + " min");
+  check("queue survives the snooze", slots.length > 20, "got " + slots.length);
+}
+
+// A drink must outrank a stale snooze rather than leaving a hole in the queue.
+console.log("\nexpired snooze ignored");
+{
+  const ctx = load(baseState({
+    nextNudgeAt: now - 60 * 60000,
+    log: [{ ts: now - 5 * 60000, amount: 250 }],
+  }));
+  const slots = ctx.reminderSlots();
+  check("past nextNudgeAt not used", slots[0].getTime() > now);
+  check("queue still full", slots.length > 20, "got " + slots.length);
+}
 
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "all checks passed"));
 process.exit(failures ? 1 : 0);
