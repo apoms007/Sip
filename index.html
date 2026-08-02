@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sip 🎀</title>
+<meta name="theme-color" content="#ff4d7e">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Sip">
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+
+<div id="onboard" class="screen hidden">
+  <div class="onboard-card">
+    <div id="onboardMascot" class="mascot-slot"></div>
+    <h1>Hi! I'm Mochi 🎀</h1>
+    <p>What shouwd I caww you?</p>
+    <input id="onboardName" type="text" maxlength="20" placeholder="Your name" autocomplete="off">
+    <button id="onboardGo" class="btn-primary">Wet's go!</button>
+  </div>
+</div>
+
+<div id="app" class="screen hidden">
+  <header class="topbar">
+    <div class="greeting">
+      <span id="greetText">Hi</span>
+      <button id="settingsBtn" class="icon-btn" aria-label="Settings">⚙️</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="mascotCard" class="mascot-card">
+      <div id="mascotSlot" class="mascot-slot big"></div>
+      <div id="sparkleLayer" class="sparkle-layer"></div>
+      <p id="mascotLine" class="mascot-line"></p>
+    </section>
+
+    <section class="bottle-card">
+      <div id="bottleSlot" class="bottle-slot"></div>
+      <div class="bottle-stats">
+        <div class="stat-main"><span id="totalMl">0</span><span class="stat-unit">ml</span></div>
+        <div class="stat-sub">of <span id="goalMl">2000</span> ml</div>
+        <div id="remainText" class="stat-remain"></div>
+      </div>
+    </section>
+
+    <section class="drink-buttons" id="drinkButtons"></section>
+
+    <section class="streak-card">
+      <div class="streak-box">
+        <span class="streak-num" id="streakNum">0</span>
+        <span class="streak-label">day stweak 🔥</span>
+        <span class="streak-best" id="streakBest"></span>
+      </div>
+    </section>
+
+    <section class="wardrobe-card">
+      <h2>Mochi's wardrobe 🎀</h2>
+      <div class="ward-group"><h3>Bows</h3><div class="ward-row" id="rowBow"></div></div>
+      <div class="ward-group"><h3>Hats</h3><div class="ward-row" id="rowHat"></div></div>
+      <div class="ward-group"><h3>Scenes</h3><div class="ward-row" id="rowBg"></div></div>
+    </section>
+
+    <section class="chart-card">
+      <h2>This week</h2>
+      <svg id="weekChart" viewBox="0 0 320 120" class="week-chart"></svg>
+    </section>
+
+    <section class="notif-card" id="notifCard">
+      <p>Wet Mochi wemind you to dwink! 🎀</p>
+      <button id="notifBtn" class="btn-primary">Enabwe wemindews</button>
+    </section>
+  </main>
+</div>
+
+<div id="settings" class="sheet hidden">
+  <div class="sheet-inner">
+    <h2>Settings</h2>
+    <label>Name<input id="setName" type="text" maxlength="20"></label>
+    <label>Daily goal (ml)<input id="setGoal" type="number" step="50" min="500" max="5000"></label>
+    <label>Active hours
+      <div class="hour-row">
+        <input id="setStart" type="number" min="0" max="23"> to
+        <input id="setEnd" type="number" min="0" max="23">
+      </div>
+    </label>
+    <label>Drink sizes (ml, comma separated)<input id="setSizes" type="text"></label>
+    <label class="row-label"><input id="setSound" type="checkbox"> Sound on</label>
+    <div class="sheet-actions">
+      <button id="setCancel" class="btn-ghost">Cancel</button>
+      <button id="setSave" class="btn-primary">Save</button>
+    </div>
+    <button id="setUndo" class="btn-ghost undo-btn">Undo last drink</button>
+  </div>
+</div>
+
+<div id="celebrate" class="celebrate hidden">
+  <div class="celebrate-inner">
+    <div id="celebrateMascot" class="mascot-slot big"></div>
+    <h2>Goaw weached!! 🎉</h2>
+    <p id="celebrateLine">Mochi is SO pwoud of you today! 💕</p>
+    <button id="celebrateClose" class="btn-primary">Yay!</button>
+  </div>
+</div>
+
+<div id="unlockToast" class="unlock-toast hidden"></div>
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js?v=2"></script>
+</body>
+</html>

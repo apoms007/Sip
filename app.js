@@ -1,0 +1,643 @@
+// Sip — Mochi the hydration cat.
+// Mochi is an original kawaii character drawn procedurally in SVG; no third-party
+// artwork or assets are used anywhere in this app.
+"use strict";
+
+const STORE_KEY = "sip_state_v2";
+const OLD_KEY = "sip_state_v1";
+const REMINDER_GAP_MS = 90 * 60 * 1000;   // escalating nudges, ~90min apart
+const DEFAULT_SIZES = [150, 250, 350, 500];
+const DRINK_EMOJI = { 150: "🥃", 250: "🥛", 350: "☕", 500: "🍶" };
+
+/* ---------------------------------------------------------------- state */
+function defaultState() {
+  return {
+    name: null, goalMl: 2000, activeStart: 8, activeEnd: 22,
+    drinkSizes: DEFAULT_SIZES.slice(),
+    log: [], lastNotified: 0, bestStreak: 0,
+    unlocked: ["bow_red", "hat_none", "bg_plain"],
+    equipped: { bow: "bow_red", hat: "hat_none", bg: "bg_plain" },
+    sound: true, onboarded: false, celebratedOn: null,
+  };
+}
+
+let state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return Object.assign(defaultState(), JSON.parse(raw));
+    const old = localStorage.getItem(OLD_KEY);   // carry over the v1 pilot data
+    if (old) {
+      const o = JSON.parse(old);
+      return Object.assign(defaultState(), {
+        name: o.name, goalMl: o.goalMl, activeStart: o.activeStart, activeEnd: o.activeEnd,
+        drinkSizes: o.drinkSizes, log: o.log || [], onboarded: o.onboarded,
+      });
+    }
+  } catch (e) { /* corrupt storage — fall through to a clean slate */ }
+  return defaultState();
+}
+
+function saveState() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  syncStateToSW();
+}
+
+/* ---------------------------------------------------------------- dates */
+function dayKey(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+}
+
+function dayTotals() {
+  const m = new Map();
+  for (const e of state.log) m.set(dayKey(e.ts), (m.get(dayKey(e.ts)) || 0) + e.amount);
+  return m;
+}
+
+function todayTotal() { return dayTotals().get(dayKey(Date.now())) || 0; }
+function lastLogTs() { return state.log.length ? state.log[state.log.length - 1].ts : 0; }
+function lifetimeMl() { return state.log.reduce((s, e) => s + e.amount, 0); }
+
+function goalDays(totals) {
+  let n = 0;
+  for (const v of totals.values()) if (v >= state.goalMl) n++;
+  return n;
+}
+
+function computeStreak(totals) {
+  let streak = 0;
+  const now = new Date();
+  for (let i = 0; i < 400; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const total = totals.get(dayKey(d.getTime())) || 0;
+    if (total >= state.goalMl) streak++;
+    else if (i === 0) continue;          // today is still in progress
+    else break;
+  }
+  return streak;
+}
+
+function weekBars(totals) {
+  const out = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    out.push({
+      label: d.toLocaleDateString(undefined, { weekday: "short" })[0],
+      total: totals.get(dayKey(d.getTime())) || 0,
+    });
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------ wardrobe */
+// req is checked against {streak, best, days, ml}; season items appear only
+// inside their date window so they feel like a limited-time treat.
+const ITEMS = [
+  { id: "bow_red",    type: "bow", name: "Ruby",    chip: "🎀", color: "#ff4d7e", req: {} },
+  { id: "bow_sky",    type: "bow", name: "Sky",     chip: "🎀", color: "#57b6e8", req: { days: 2 } },
+  { id: "bow_mint",   type: "bow", name: "Mint",    chip: "🎀", color: "#4fc9a3", req: { days: 5 } },
+  { id: "bow_lilac",  type: "bow", name: "Lilac",   chip: "🎀", color: "#b07ce8", req: { streak: 7 } },
+  { id: "bow_dots",   type: "bow", name: "Dots",    chip: "🎀", color: "#ff85ab", req: { streak: 14 }, pattern: "dots" },
+  { id: "bow_gold",   type: "bow", name: "Glitter", chip: "✨", color: "#ffc23d", req: { streak: 30 }, pattern: "glitter" },
+  { id: "bow_xmas",   type: "bow", name: "Holly",   chip: "🎄", color: "#2e9e5b", req: { season: [11, 1, 11, 31] } },
+  { id: "bow_spooky", type: "bow", name: "Spooky",  chip: "🎃", color: "#ff8c20", req: { season: [9, 20, 9, 31] } },
+  { id: "bow_love",   type: "bow", name: "Love",    chip: "💗", color: "#ff2d6f", req: { season: [1, 7, 1, 20] }, pattern: "dots" },
+
+  { id: "hat_none",   type: "hat", name: "None",    chip: "🚫", req: {} },
+  { id: "hat_flower", type: "hat", name: "Flowers", chip: "🌸", req: { days: 3 } },
+  { id: "hat_sun",    type: "hat", name: "Sun hat", chip: "👒", req: { days: 8 } },
+  { id: "hat_beanie", type: "hat", name: "Beanie",  chip: "🧢", req: { ml: 25000 } },
+  { id: "hat_phones", type: "hat", name: "Phones",  chip: "🎧", req: { days: 20 } },
+  { id: "hat_crown",  type: "hat", name: "Crown",   chip: "👑", req: { streak: 21 } },
+  { id: "hat_santa",  type: "hat", name: "Santa",   chip: "🎅", req: { season: [11, 1, 11, 31] } },
+
+  { id: "bg_plain",   type: "bg", name: "Plain",    chip: "⬜", req: {} },
+  { id: "bg_sky",     type: "bg", name: "Sky",      chip: "☁️", req: { days: 2 } },
+  { id: "bg_blossom", type: "bg", name: "Blossom",  chip: "🌸", req: { days: 6 } },
+  { id: "bg_forest",  type: "bg", name: "Forest",   chip: "🌲", req: { days: 12 } },
+  { id: "bg_night",   type: "bg", name: "Night",    chip: "🌙", req: { streak: 10 } },
+  { id: "bg_beach",   type: "bg", name: "Beach",    chip: "🏖️", req: { days: 25 } },
+];
+
+const ITEM_BY_ID = {};
+for (const it of ITEMS) ITEM_BY_ID[it.id] = it;
+
+function inSeason(req) {
+  if (!req.season) return false;
+  const [m1, d1, m2, d2] = req.season;
+  const now = new Date(), m = now.getMonth(), d = now.getDate();
+  const after = m > m1 || (m === m1 && d >= d1);
+  const before = m < m2 || (m === m2 && d <= d2);
+  return after && before;
+}
+
+function reqMet(item, stats) {
+  const r = item.req;
+  if (r.season) return inSeason(r);
+  if (r.streak && stats.best < r.streak) return false;
+  if (r.days && stats.days < r.days) return false;
+  if (r.ml && stats.ml < r.ml) return false;
+  return true;
+}
+
+function reqText(item) {
+  const r = item.req;
+  if (r.season) return "seasonal";
+  if (r.streak) return r.streak + "d streak";
+  if (r.days) return r.days + " goal days";
+  if (r.ml) return (r.ml / 1000) + "L total";
+  return "";
+}
+
+function refreshUnlocks(stats) {
+  const fresh = [];
+  for (const it of ITEMS) {
+    if (state.unlocked.includes(it.id)) continue;
+    if (reqMet(it, stats)) { state.unlocked.push(it.id); fresh.push(it); }
+  }
+  return fresh;
+}
+
+function equippedItem(type) {
+  const id = state.equipped[type];
+  return ITEM_BY_ID[id] && state.unlocked.includes(id) ? ITEM_BY_ID[id] : null;
+}
+
+/* -------------------------------------------------------------- mascot */
+// All mascot geometry lives in a 300x250 box: face centre (150,152), ears poking
+// out above y=70 so they stay visible instead of being swallowed by the head.
+function eyesFor(mood) {
+  if (mood === "happy" || mood === "party") {
+    return `<g class="m-eyes">
+      <path d="M98 152 Q112 134 126 152" stroke="#3c2d37" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <path d="M174 152 Q188 134 202 152" stroke="#3c2d37" stroke-width="7" fill="none" stroke-linecap="round"/></g>`;
+  }
+  if (mood === "sad") {
+    return `<g class="m-eyes">
+      <path d="M98 142 Q112 160 126 150" stroke="#3c2d37" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <path d="M174 150 Q188 160 202 142" stroke="#3c2d37" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <path d="M124 158 q7 14 0 21 q-7 -7 0 -21" fill="#8ed6f5" opacity=".9"/></g>`;
+  }
+  return `<g class="m-eyes"><circle cx="112" cy="146" r="9" fill="#3c2d37"/>
+          <circle cx="188" cy="146" r="9" fill="#3c2d37"/>
+          <circle cx="115" cy="143" r="2.8" fill="#fff"/><circle cx="191" cy="143" r="2.8" fill="#fff"/></g>`;
+}
+
+function bowSVG(item) {
+  if (!item) return "";
+  const c = item.color, dark = shade(c, -22);
+  let deco = "";
+  if (item.pattern === "dots") {
+    deco = `<circle cx="-22" cy="-6" r="3.2" fill="#fff" opacity=".85"/><circle cx="-13" cy="7" r="3.2" fill="#fff" opacity=".85"/>
+            <circle cx="22" cy="-6" r="3.2" fill="#fff" opacity=".85"/><circle cx="13" cy="7" r="3.2" fill="#fff" opacity=".85"/>`;
+  } else if (item.pattern === "glitter") {
+    deco = `<text x="-26" y="2" font-size="11">✨</text><text x="14" y="4" font-size="11">✨</text>`;
+  }
+  // Sits on the outer edge of the left ear so the ear tip still shows above it.
+  return `<g transform="translate(84 80)">
+    <polygon points="0,0 -32,-21 -32,21" fill="${c}"/><polygon points="0,0 32,-21 32,21" fill="${c}"/>
+    <polygon points="0,0 -32,-21 -27,0" fill="${dark}" opacity=".35"/><polygon points="0,0 32,-21 27,0" fill="${dark}" opacity=".35"/>
+    ${deco}<circle r="8.5" fill="${dark}"/></g>`;
+}
+
+function hatSVG(item) {
+  if (!item) return "";
+  switch (item.id) {
+    case "hat_flower":
+      return [[104, 88], [127, 76], [150, 70], [173, 76], [196, 88]].map((p, i) => {
+        const col = ["#ff85ab", "#ffd36e", "#fff", "#b07ce8", "#ff85ab"][i];
+        return `<g transform="translate(${p[0]} ${p[1]})">${[0, 72, 144, 216, 288].map(a =>
+          `<ellipse cx="0" cy="-6" rx="4.4" ry="6" fill="${col}" transform="rotate(${a})"/>`).join("")}
+          <circle r="3.2" fill="#ffc23d"/></g>`;
+      }).join("");
+    case "hat_sun":
+      return `<ellipse cx="150" cy="88" rx="118" ry="24" fill="#ffe0a8"/>
+              <path d="M100 88 q6 -54 50 -54 q44 0 50 54 z" fill="#ffeec9"/>
+              <path d="M100 84 q50 14 100 0 l0 9 q-50 14 -100 0 z" fill="#ff85ab"/>`;
+    case "hat_beanie":
+      return `<path d="M72 94 q4 -66 78 -66 q74 0 78 66 z" fill="#7cc4e8"/>
+              <rect x="68" y="86" width="164" height="20" rx="10" fill="#a9dcf5"/>
+              <circle cx="150" cy="24" r="13" fill="#fff"/>`;
+    case "hat_phones":
+      return `<path d="M56 120 q0 -94 94 -94 q94 0 94 94" stroke="#ff4d7e" stroke-width="13" fill="none" stroke-linecap="round"/>
+              <rect x="38" y="98" width="34" height="54" rx="16" fill="#d92f5e"/>
+              <rect x="228" y="98" width="34" height="54" rx="16" fill="#d92f5e"/>`;
+    case "hat_crown":
+      return `<polygon points="98,86 98,44 124,68 150,28 176,68 202,44 202,86" fill="#ffc23d" stroke="#e8a715" stroke-width="3" stroke-linejoin="round"/>
+              <circle cx="150" cy="30" r="5.5" fill="#ff4d7e"/>`;
+    case "hat_santa":
+      return `<path d="M78 92 q10 -68 78 -64 q58 4 66 38 q-44 36 -144 26 z" fill="#e8354f"/>
+              <rect x="70" y="82" width="158" height="21" rx="10.5" fill="#fff"/>
+              <circle cx="228" cy="66" r="15" fill="#fff"/>`;
+    default: return "";
+  }
+}
+
+function shade(hex, pct) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (v) => Math.max(0, Math.min(255, Math.round(v + (pct / 100) * 255)));
+  return "#" + [f((n >> 16) & 255), f((n >> 8) & 255), f(n & 255)]
+    .map(v => v.toString(16).padStart(2, "0")).join("");
+}
+
+function mochiSVG(mood) {
+  const bow = equippedItem("bow"), hat = equippedItem("hat");
+  const blush = (mood === "happy" || mood === "party")
+    ? `<ellipse cx="96" cy="176" rx="16" ry="9.5" fill="#ffa3c2" opacity=".7"/>
+       <ellipse cx="204" cy="176" rx="16" ry="9.5" fill="#ffa3c2" opacity=".7"/>` : "";
+  // A pink outline keeps the white cat readable on both the plain white card
+  // and the dark "night" scene.
+  const OL = `stroke="#f2b9d1" stroke-width="3.5" stroke-linejoin="round"`;
+  return `<svg viewBox="0 0 300 250" xmlns="http://www.w3.org/2000/svg"><g class="m-body">
+    <polygon points="70,106 100,28 130,110" fill="#fff" ${OL}/><polygon points="170,110 200,28 230,106" fill="#fff" ${OL}/>
+    <polygon points="82,100 100,48 118,102" fill="#ffc5de"/><polygon points="182,102 200,48 218,100" fill="#ffc5de"/>
+    <ellipse cx="150" cy="152" rx="100" ry="80" fill="#fff" ${OL}/>
+    <g stroke="#d9b3c1" stroke-width="3" stroke-linecap="round">
+      <line x1="14" y1="142" x2="80" y2="148"/><line x1="10" y1="162" x2="78" y2="162"/><line x1="14" y1="182" x2="80" y2="176"/>
+      <line x1="286" y1="142" x2="220" y2="148"/><line x1="290" y1="162" x2="222" y2="162"/><line x1="286" y1="182" x2="220" y2="176"/>
+    </g>
+    ${blush}${eyesFor(mood)}
+    <ellipse cx="150" cy="172" rx="13" ry="8" fill="#ffc23d"/>
+    ${hatSVG(hat)}${bowSVG(bow)}
+  </g></svg>`;
+}
+
+/* -------------------------------------------------------------- bottle */
+const BOTTLE_TOP = 62, BOTTLE_BOT = 286, BOTTLE_H = BOTTLE_BOT - BOTTLE_TOP;
+
+function bottleSVG() {
+  const bow = equippedItem("bow");
+  const bc = bow ? bow.color : "#ff4d7e";
+  return `<svg viewBox="0 0 200 310" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <clipPath id="bodyClip"><rect x="34" y="${BOTTLE_TOP}" width="132" height="${BOTTLE_H}" rx="40"/></clipPath>
+      <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ff9ec4"/><stop offset="1" stop-color="#ff5f92"/>
+      </linearGradient>
+    </defs>
+    <rect x="74" y="8" width="52" height="30" rx="11" fill="#ffb3d0"/>
+    <rect x="80" y="34" width="40" height="30" fill="#ffe6f0"/>
+    <rect x="34" y="${BOTTLE_TOP}" width="132" height="${BOTTLE_H}" rx="40" fill="#ffe6f0"/>
+    <g clip-path="url(#bodyClip)">
+      <g id="waterG" transform="translate(0 ${BOTTLE_H})">
+        <g class="wave-scroll">
+          <path d="M-100,14 Q-75,0 -50,14 T0,14 T50,14 T100,14 T150,14 T200,14 T250,14 T300,14 L300,320 L-100,320 Z" fill="url(#wg)"/>
+        </g>
+      </g>
+    </g>
+    <rect x="34" y="${BOTTLE_TOP}" width="132" height="${BOTTLE_H}" rx="40" fill="none" stroke="#ffb3d0" stroke-width="6"/>
+    <rect x="52" y="92" width="13" height="86" rx="6.5" fill="#fff" opacity=".55"/>
+    <g transform="translate(100 62)">
+      <polygon points="0,0 -30,-19 -30,19" fill="${bc}"/><polygon points="0,0 30,-19 30,19" fill="${bc}"/>
+      <circle r="8" fill="${shade(bc, -22)}"/>
+    </g>
+  </svg>`;
+}
+
+function setWater(pct) {
+  const g = document.getElementById("waterG");
+  if (g) g.setAttribute("transform", `translate(0 ${BOTTLE_H * (1 - Math.min(1, pct))})`);
+}
+
+/* ---------------------------------------------------------------- copy */
+// {n} is swapped for whatever name she enters at onboarding, so no personal
+// name is baked into the source.
+const LINES = {
+  party:   ["Wa-hoo!! You did it, {n}! 🎉", "Mochi is SO pwoud of you! 🥰", "Bestest dwinking evew, {n}! ✨"],
+  happy:   ["Nom nom, watew is yummy! 💕", "Yay {n}! Suchhh a good sip! 🎀", "Mochi feews aww bubbwy now! 🫧"],
+  neutral: ["Mochi wants a wittle sip pwease! 🥺", "{n}, sippy sip? Mochi is waiting! 🎀", "Watew time, pwetty pwease? 💧"],
+  sad:     ["{n}... Mochi is vewy thirsty... 🥺", "Y-you forgot Mochi... *sniff* 😿", "So dwy... needs watew... 💔"],
+};
+// three escalation tiers, matched to how long the bottle has sat untouched
+const NUDGES = [
+  ["{n}, sippy sip time? 🎀", "Mochi wants watew pwease! 💧", "Just a wittle dwink, {n}? 🥺"],
+  ["Mochi is getting vewy thirsty... 🥺", "It's been soooo wong, {n}! *sniff* 😿", "Pwease don't forget Mochi! 💔"],
+  ["MOCHI IS DYING OF THIRST!! 😭", "Hewwo {n}?? Watew?? Pwease?? 😾", "Mochi has been waiting fowevew... 💧💔"],
+];
+
+function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+function fill(s) { return s.replace(/\{n\}/g, state.name || "cutie"); }
+function line(arr) { return fill(pick(arr)); }
+
+function moodFor(total) {
+  if (total >= state.goalMl) return "party";
+  const last = lastLogTs();
+  if (!last) return "neutral";      // never guilt-trip someone on their first open
+  const hrs = (Date.now() - last) / 3600000;
+  if (hrs < 0.5) return "happy";
+  if (hrs > 2.5) return "sad";
+  return "neutral";
+}
+
+/* --------------------------------------------------------------- audio */
+let actx = null;
+function playPop() {
+  if (!state.sound) { buzz(25); return; }
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    const t = actx.currentTime;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(380, t);
+    o.frequency.exponentialRampToValueAtTime(1150, t + 0.09);   // rising bubble "pop"
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+    o.connect(g).connect(actx.destination);
+    o.start(t); o.stop(t + 0.2);
+  } catch (e) {}
+  buzz(25);
+}
+function buzz(ms) { if (navigator.vibrate) try { navigator.vibrate(ms); } catch (e) {} }
+
+/* ------------------------------------------------------------- render */
+const $ = (id) => document.getElementById(id);
+
+function render(opts) {
+  opts = opts || {};
+  const totals = dayTotals();
+  const streak = computeStreak(totals);
+  const stats = { streak, best: Math.max(streak, state.bestStreak), days: goalDays(totals), ml: lifetimeMl() };
+  if (streak > state.bestStreak) state.bestStreak = streak;
+
+  const fresh = refreshUnlocks(stats);
+  if (fresh.length) { saveState(); showUnlock(fresh[0]); }
+
+  const total = totals.get(dayKey(Date.now())) || 0;
+  const mood = moodFor(total);
+
+  $("greetText").textContent = "Hi, " + (state.name || "cutie") + " 🎀";
+  $("totalMl").textContent = total;
+  $("goalMl").textContent = state.goalMl;
+  const left = Math.max(0, state.goalMl - total);
+  $("remainText").textContent = left ? left + " ml to go!" : "Goaw compwete! 🎉";
+  $("streakNum").textContent = streak;
+  $("streakBest").textContent = state.bestStreak ? "best " + state.bestStreak : "";
+
+  const slot = $("mascotSlot");
+  slot.innerHTML = mochiSVG(mood);
+  slot.className = "mascot-slot big" + (mood === "sad" ? " sad" : mood === "party" ? " party" : "");
+  if (opts.react) {
+    void slot.offsetWidth;                       // restart the pop animation
+    slot.classList.add("react");
+    setTimeout(() => slot.classList.remove("react"), 620);
+  }
+  if (!opts.keepLine) $("mascotLine").textContent = line(LINES[mood]);
+
+  const bg = equippedItem("bg");
+  $("mascotCard").className = "mascot-card" + (bg && bg.id !== "bg_plain" ? " scene-" + bg.id.slice(3) : "");
+
+  if (!$("bottleSlot").firstChild || opts.rebuildBottle) $("bottleSlot").innerHTML = bottleSVG();
+  requestAnimationFrame(() => setWater(total / state.goalMl));
+
+  $("drinkButtons").innerHTML = state.drinkSizes.map(a =>
+    `<button class="drink-btn" data-amt="${a}"><span class="emoji">${DRINK_EMOJI[a] || "💧"}</span><span class="amt">${a}ml</span></button>`).join("");
+  $("drinkButtons").querySelectorAll(".drink-btn").forEach(b =>
+    b.addEventListener("click", () => logDrink(Number(b.dataset.amt))));
+
+  renderWardrobe(stats);
+  renderChart(weekBars(totals));
+  $("notifCard").classList.toggle("hidden", !("Notification" in window) || Notification.permission === "granted");
+}
+
+// Bows all share the 🎀 glyph, so draw a real swatch in the item's own colour —
+// otherwise every bow in the drawer looks identical.
+function chipHTML(item) {
+  if (item.type !== "bow") return item.chip;
+  const d = shade(item.color, -22);
+  return `<svg viewBox="0 0 40 26" width="27" height="18" aria-hidden="true">
+    <polygon points="20,13 4,3 4,23" fill="${item.color}"/><polygon points="20,13 36,3 36,23" fill="${item.color}"/>
+    <circle cx="20" cy="13" r="4.6" fill="${d}"/></svg>`;
+}
+
+function renderWardrobe(stats) {
+  for (const [type, rowId] of [["bow", "rowBow"], ["hat", "rowHat"], ["bg", "rowBg"]]) {
+    const items = ITEMS.filter(i => i.type === type)
+      .filter(i => !i.req.season || inSeason(i.req) || state.unlocked.includes(i.id));
+    $(rowId).innerHTML = items.map(i => {
+      const un = state.unlocked.includes(i.id);
+      const eq = state.equipped[type] === i.id;
+      return `<button class="ward-item ${un ? "" : "locked"} ${eq ? "equipped" : ""}" data-type="${type}" data-id="${i.id}">
+        <span class="chip">${un ? chipHTML(i) : "🔒"}</span><span class="cap">${un ? i.name : reqText(i)}</span></button>`;
+    }).join("");
+    $(rowId).querySelectorAll(".ward-item").forEach(b => b.addEventListener("click", () => {
+      const it = ITEM_BY_ID[b.dataset.id];
+      if (!state.unlocked.includes(it.id)) { showToast("Wocked! " + reqText(it) + " to unwock 🔒"); return; }
+      state.equipped[b.dataset.type] = it.id;
+      saveState(); buzz(15);
+      render({ keepLine: true, rebuildBottle: true });
+    }));
+  }
+}
+
+function renderChart(days) {
+  const max = Math.max(state.goalMl, ...days.map(d => d.total)) || 1;
+  const barW = 28, gap = (320 - barW * 7) / 8;
+  const goalY = 96 - (state.goalMl / max) * 86;
+  let svg = `<line x1="0" y1="${goalY}" x2="320" y2="${goalY}" stroke="#ff4d7e" stroke-width="1.5" stroke-dasharray="5 5" opacity=".6"/>`;
+  days.forEach((d, i) => {
+    const x = gap + i * (barW + gap);
+    const h = Math.max(5, (d.total / max) * 86), y = 96 - h;
+    const hit = d.total >= state.goalMl;
+    svg += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="9" fill="${hit ? "#ff4d7e" : "#ffd0e2"}"/>`;
+    if (hit) svg += `<text x="${x + barW / 2}" y="${y - 5}" font-size="11" text-anchor="middle">✨</text>`;
+    svg += `<text x="${x + barW / 2}" y="112" font-size="11" fill="#8f6474" font-weight="700" text-anchor="middle">${d.label}</text>`;
+  });
+  $("weekChart").innerHTML = svg;
+}
+
+/* ------------------------------------------------------------ actions */
+function logDrink(amount) {
+  const before = todayTotal();
+  state.log.push({ ts: Date.now(), amount });
+  if (state.log.length > 5000) state.log = state.log.slice(-5000);
+  state.lastNotified = Date.now();
+  saveState();
+  playPop();
+  sparkle();
+  render({ react: true });
+  const after = todayTotal();
+  if (after >= state.goalMl && before < state.goalMl && state.celebratedOn !== dayKey(Date.now())) {
+    state.celebratedOn = dayKey(Date.now());
+    saveState();
+    celebrate();
+  }
+}
+
+function undoLast() {
+  if (!state.log.length) { showToast("Nothing to undo!"); return; }
+  state.log.pop();
+  saveState();
+  render();
+  showToast("Undid wast dwink 💧");
+}
+
+function sparkle() {
+  const layer = $("sparkleLayer");
+  for (let i = 0; i < 5; i++) {
+    const s = document.createElement("span");
+    s.className = "sparkle";
+    s.textContent = pick(["✨", "💕", "🫧", "💧", "🎀"]);
+    s.style.left = (18 + Math.random() * 64) + "%";
+    s.style.top = (35 + Math.random() * 35) + "%";
+    s.style.animationDelay = (i * 0.07) + "s";
+    layer.appendChild(s);
+    setTimeout(() => s.remove(), 1400);
+  }
+}
+
+function celebrate() {
+  $("celebrateMascot").innerHTML = mochiSVG("party");
+  $("celebrateMascot").className = "mascot-slot big party";
+  $("celebrateLine").textContent = line(LINES.party);
+  $("celebrate").classList.remove("hidden");
+  buzz([40, 60, 40]);
+  for (let i = 0; i < 26; i++) {
+    const c = document.createElement("span");
+    c.className = "confetti";
+    c.textContent = pick(["🎀", "✨", "💕", "🫧", "🎉"]);
+    c.style.left = Math.random() * 100 + "vw";
+    c.style.animationDuration = (1.6 + Math.random() * 1.4) + "s";
+    c.style.animationDelay = (Math.random() * 0.5) + "s";
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 3600);
+  }
+}
+
+function showToast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.remove("hidden");
+  clearTimeout(showToast._h);
+  showToast._h = setTimeout(() => t.classList.add("hidden"), 2400);
+}
+
+function showUnlock(item) {
+  const t = $("unlockToast");
+  t.textContent = "New unwock! " + item.chip + " " + item.name;
+  t.classList.remove("hidden");
+  buzz([30, 50, 30]);
+  clearTimeout(showUnlock._h);
+  showUnlock._h = setTimeout(() => t.classList.add("hidden"), 3200);
+}
+
+/* --------------------------------------------------------- onboarding */
+function initOnboarding() {
+  $("onboardMascot").innerHTML = mochiSVG("happy");
+  const go = () => {
+    state.name = $("onboardName").value.trim() || "cutie";
+    state.onboarded = true;
+    saveState();
+    $("onboard").classList.add("hidden");
+    $("app").classList.remove("hidden");
+    render();
+  };
+  $("onboardGo").addEventListener("click", go);
+  $("onboardName").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+}
+
+/* ------------------------------------------------------------ settings */
+function initSettings() {
+  $("settingsBtn").addEventListener("click", () => {
+    $("setName").value = state.name || "";
+    $("setGoal").value = state.goalMl;
+    $("setStart").value = state.activeStart;
+    $("setEnd").value = state.activeEnd;
+    $("setSizes").value = state.drinkSizes.join(", ");
+    $("setSound").checked = !!state.sound;
+    $("settings").classList.remove("hidden");
+  });
+  $("setCancel").addEventListener("click", () => $("settings").classList.add("hidden"));
+  $("setUndo").addEventListener("click", undoLast);
+  $("setSave").addEventListener("click", () => {
+    state.name = $("setName").value.trim() || state.name;
+    state.goalMl = Math.max(500, Number($("setGoal").value) || state.goalMl);
+    state.activeStart = Math.min(23, Math.max(0, Number($("setStart").value) || 0));
+    state.activeEnd = Math.min(23, Math.max(0, Number($("setEnd").value) || 22));
+    const sizes = $("setSizes").value.split(",").map(s => Number(s.trim())).filter(n => n > 0 && n < 3000);
+    if (sizes.length) state.drinkSizes = sizes.slice(0, 4);
+    state.sound = $("setSound").checked;
+    saveState();
+    $("settings").classList.add("hidden");
+    render({ rebuildBottle: true });
+  });
+  $("celebrateClose").addEventListener("click", () => $("celebrate").classList.add("hidden"));
+}
+
+/* ------------------------------------------------------- notifications */
+function initNotifications() {
+  $("notifBtn").addEventListener("click", async () => {
+    if (!("Notification" in window)) { showToast("Notifications awen't suppowted hewe."); return; }
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      showToast("Yay! Mochi wiww wemind you 🎀");
+      $("notifCard").classList.add("hidden");
+      tryPeriodicSync();
+    }
+  });
+  setInterval(checkReminder, 60 * 1000);
+  setInterval(() => render({ keepLine: true }), 5 * 60 * 1000);  // mood decays over time
+  checkReminder();
+}
+
+function checkReminder() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const hour = new Date().getHours();
+  if (hour < state.activeStart || hour >= state.activeEnd) return;
+  if (todayTotal() >= state.goalMl) return;
+  const sinceLog = Date.now() - (lastLogTs() || 0);
+  const sinceNotify = Date.now() - (state.lastNotified || 0);
+  if (sinceLog < REMINDER_GAP_MS || sinceNotify < REMINDER_GAP_MS) return;
+
+  const tier = Math.min(2, Math.floor(sinceLog / REMINDER_GAP_MS) - 1);
+  state.lastNotified = Date.now();
+  saveState();
+  const body = line(NUDGES[Math.max(0, tier)]);
+  const opts = { body, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag: "sip-reminder", renotify: true };
+  if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready.then(r => r.showNotification("Mochi says 🎀", opts)).catch(() => {});
+  } else {
+    try { new Notification("Mochi says 🎀", opts); } catch (e) {}
+  }
+}
+
+async function tryPeriodicSync() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if ("periodicSync" in reg) {
+      const st = await navigator.permissions.query({ name: "periodic-background-sync" });
+      if (st.state === "granted") await reg.periodicSync.register("hydration-check", { minInterval: 60 * 60 * 1000 });
+    }
+  } catch (e) { /* unsupported on iOS; foreground checks still run */ }
+}
+
+function syncStateToSW() {
+  if (!("caches" in window)) return;
+  const snap = {
+    goalMl: state.goalMl, activeStart: state.activeStart, activeEnd: state.activeEnd,
+    lastLogTs: lastLogTs(), todayTotal: todayTotal(), name: state.name || "cutie",
+  };
+  caches.open("sip-state").then(c => c.put("/state.json", new Response(JSON.stringify(snap)))).catch(() => {});
+}
+
+/* ---------------------------------------------------------------- boot */
+function boot() {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  initOnboarding();
+  initSettings();
+  initNotifications();
+  if (state.onboarded) { $("app").classList.remove("hidden"); render(); }
+  else $("onboard").classList.remove("hidden");
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.onboarded) render({ keepLine: true });
+  });
+  syncStateToSW();
+}
+
+document.addEventListener("DOMContentLoaded", boot);
