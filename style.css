@@ -130,6 +130,9 @@ input{font-family:inherit;}
 .hour-row{display:flex;align-items:center;gap:8px;}
 .sheet-actions{display:flex;gap:10px;}
 .undo-btn{margin-top:10px;background:var(--soft-2);font-size:14px;}
+.backup-row{display:flex;gap:10px;margin-top:10px;}
+.backup-row .btn-ghost{background:var(--soft-2);font-size:14px;}
+.backup-hint{font-size:11px;color:var(--text-soft);text-align:center;margin:8px 0 0;font-weight:700;}
 
 /* ---------- celebrate ---------- */
 .celebrate{position:fixed;inset:0;background:rgba(255,77,126,.35);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:40;padding:24px;}

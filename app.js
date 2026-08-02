@@ -478,6 +478,41 @@ function undoLast() {
   showToast("Undid wast dwink 💧");
 }
 
+/* --------------------------------------------------------------- backup */
+// Everything lives in localStorage with no server copy, so a manual export is
+// the only thing standing between a cleared browser and a lost streak.
+function exportBackup() {
+  try {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sip-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast("Backup saved! 💾");
+  } catch (e) { showToast("Couldn't save the backup 😿"); }
+}
+
+function importBackup(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    let data;
+    try { data = JSON.parse(r.result); } catch (e) { data = null; }
+    if (!data || !Array.isArray(data.log)) { showToast("That file didn't wook wight 😿"); return; }
+    const when = data.log.length ? new Date(data.log[data.log.length - 1].ts).toLocaleDateString() : "empty";
+    if (!confirm("Restore this backup (last drink: " + when + ")?\n\nIt replaces what is currently on this phone.")) return;
+    state = Object.assign(defaultState(), data);
+    saveState();
+    render({ rebuildBottle: true });
+    showToast("Westored! 🎀");
+  };
+  r.onerror = () => showToast("Couldn't wead that file 😿");
+  r.readAsText(file);
+}
+
 function sparkle() {
   const layer = $("sparkleLayer");
   for (let i = 0; i < 5; i++) {
@@ -555,6 +590,12 @@ function initSettings() {
   });
   $("setCancel").addEventListener("click", () => $("settings").classList.add("hidden"));
   $("setUndo").addEventListener("click", undoLast);
+  $("setExport").addEventListener("click", exportBackup);
+  $("setImport").addEventListener("click", () => $("importFile").click());
+  $("importFile").addEventListener("change", e => {
+    if (e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
+    e.target.value = "";                      // let the same file be picked twice
+  });
   $("setSave").addEventListener("click", () => {
     state.name = $("setName").value.trim() || state.name;
     state.goalMl = Math.max(500, Number($("setGoal").value) || state.goalMl);
@@ -629,6 +670,9 @@ function syncStateToSW() {
 /* ---------------------------------------------------------------- boot */
 function boot() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  // Ask the browser not to evict us under storage pressure — everything she has
+  // ever logged lives in localStorage and there is no server-side copy.
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   initOnboarding();
   initSettings();
   initNotifications();
