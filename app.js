@@ -429,6 +429,7 @@ function render(opts) {
 
   renderTypes();
   renderDrinkButtons();
+  renderTodayLog();
   renderWardrobe(stats);
   renderChart(weekBars(totals));
   renderCalendar(totals);
@@ -563,12 +564,49 @@ function logDrink(amount, type) {
   }
 }
 
-function undoLast() {
-  if (!state.log.length) { showToast("Nothing to undo!"); return; }
-  state.log.pop();
+// Removing by index into state.log rather than by timestamp: two taps inside the
+// same millisecond would otherwise be indistinguishable and delete the wrong one.
+function removeEntry(idx) {
+  if (idx < 0 || idx >= state.log.length) return;
+  const gone = state.log[idx];
+  state.log.splice(idx, 1);
+  // A mis-tap that had pushed her over the goal should let the celebration fire
+  // again once she genuinely gets there.
+  if (todayTotal() < state.goalMl && state.celebratedOn === dayKey(Date.now())) {
+    state.celebratedOn = null;
+  }
+  state.nextNudgeAt = 0;
   saveState();
+  buzz(15);
   render();
-  showToast("Undid wast dwink 💧");
+  if (NATIVE) scheduleNative();          // the last-drink time may have moved
+  showToast("Wemoved " + gone.amount + "ml 💧");
+}
+
+function renderTodayLog() {
+  const today = dayKey(Date.now());
+  const rows = [];
+  state.log.forEach((e, i) => { if (dayKey(e.ts) === today) rows.push({ e, i }); });
+  rows.reverse();                        // newest first, where a mis-tap will be
+
+  if (!rows.length) {
+    $("logList").innerHTML = `<p class="log-empty">Nothing yet today — tap a cup! 🎀</p>`;
+    return;
+  }
+
+  $("logList").innerHTML = rows.map(({ e, i }) => {
+    const t = TYPE_BY_ID[e.type] || TYPE_BY_ID.water;
+    const time = new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return `<div class="log-row">
+      <span class="l-emoji">${t.emoji}</span>
+      <span class="l-amt">${e.amount}ml</span>
+      <span class="l-time">${time}</span>
+      <button class="log-del" data-idx="${i}" aria-label="Remove ${e.amount}ml">×</button>
+    </div>`;
+  }).join("");
+
+  $("logList").querySelectorAll(".log-del").forEach(b =>
+    b.addEventListener("click", () => removeEntry(Number(b.dataset.idx))));
 }
 
 /* --------------------------------------------------------------- backup */
@@ -764,7 +802,6 @@ function initSettings() {
     $("settings").classList.remove("hidden");
   });
   $("setCancel").addEventListener("click", () => $("settings").classList.add("hidden"));
-  $("setUndo").addEventListener("click", undoLast);
   $("setExport").addEventListener("click", exportBackup);
   $("setImport").addEventListener("click", () => $("importFile").click());
   $("importFile").addEventListener("change", e => {
@@ -798,6 +835,42 @@ let nativeGranted = false;
 function LN() {
   const C = window.Capacitor;
   return C && C.Plugins && C.Plugins.LocalNotifications;
+}
+
+function BAT() {
+  const C = window.Capacitor;
+  return C && C.Plugins && C.Plugins.Battery;
+}
+
+// Exact alarms are still killable: MIUI, One UI and EMUI put backgrounded apps
+// into deep sleep and drop pending alarms. Ask once, and only after reminders
+// are actually on, so the prompt has visible purpose.
+async function refreshBatteryCard() {
+  const card = $("batteryCard");
+  if (!card) return;
+  const bat = BAT();
+  if (!NATIVE || !bat || !nativeGranted) { card.classList.add("hidden"); return; }
+  try {
+    const res = await bat.isIgnoringOptimizations();
+    card.classList.toggle("hidden", !!(res && res.ignoring));
+  } catch (e) {
+    card.classList.add("hidden");
+  }
+}
+
+function initBattery() {
+  const btn = $("batteryBtn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    const bat = BAT();
+    if (!bat) return;
+    try {
+      await bat.requestIgnoreOptimizations();
+      // The system dialog resolves before the user answers, so re-check on the
+      // way back in rather than trusting the immediate result.
+      setTimeout(refreshBatteryCard, 800);
+    } catch (e) {}
+  });
 }
 
 function notifSettled() {
@@ -933,6 +1006,7 @@ async function initNative() {
     });
 
     if (nativeGranted) scheduleNative();
+    refreshBatteryCard();
   } catch (e) {}
 }
 
@@ -948,6 +1022,7 @@ function initNotifications() {
         showToast("Yay! Mochi wiww wemind you 🎀");
         $("notifCard").classList.add("hidden");
         scheduleNative();
+        refreshBatteryCard();
       } else {
         showToast("Mochi needs notification pewmission 🥺");
       }
@@ -1001,7 +1076,9 @@ async function tryPeriodicSync() {
 }
 
 function syncStateToSW() {
-  if (!("caches" in window)) return;
+  // `"caches" in window` is not enough: the property can exist but be unusable
+  // (insecure origins, embedded webviews), and saveState must never throw.
+  if (typeof caches === "undefined" || !caches || !caches.open) return;
   const snap = {
     goalMl: state.goalMl, activeStart: state.activeStart, activeEnd: state.activeEnd,
     lastLogTs: lastLogTs(), todayTotal: todayTotal(), name: state.name || "cutie",
@@ -1019,6 +1096,7 @@ function boot() {
   initSettings();
   initNotifications();
   initCustom();
+  initBattery();
   initCalendar();
   initIntro();
   if (state.onboarded) {
@@ -1029,7 +1107,9 @@ function boot() {
     $("onboard").classList.remove("hidden");
   }
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && state.onboarded) render({ keepLine: true });
+    if (document.hidden || !state.onboarded) return;
+    render({ keepLine: true });
+    refreshBatteryCard();      // she may have just granted it in system settings
   });
   syncStateToSW();
 }

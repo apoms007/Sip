@@ -45,4 +45,9 @@
          auto-granted, which suits a sideloaded personal build. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Lets the app ask, once, to be exempt from battery-optimization killing.
+         Some OEM skins (Xiaomi/MIUI, Samsung, Huawei) aggressively kill
+         background apps and can silently drop scheduled alarms otherwise. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

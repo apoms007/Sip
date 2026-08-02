@@ -128,9 +128,12 @@ console.log("\nsnooze respected");
   const span = (slots[slots.length - 1].getTime() - now) / 86400000;
   console.log("  first slot in " + firstDelta.toFixed(0) + " min, " +
     slots.length + " slots over " + span.toFixed(1) + "d");
-  const inHours = slots[0].getHours() >= 8 && slots[0].getHours() < 22;
-  // If "now" falls outside active hours the snooze is legitimately pushed to
-  // the morning, so only assert the 20min timing when it could be honoured.
+  // Test the RAW snooze moment, not the clamped slot: if now+20min lands
+  // outside active hours the nudge is legitimately pushed to the morning, and
+  // asserting against the clamped hour makes this pass or fail purely by
+  // what time of day the suite happens to run.
+  const raw = new Date(snoozeAt);
+  const inHours = raw.getHours() >= 8 && raw.getHours() < 22;
   check("snooze honoured (or clamped into hours)",
     inHours ? Math.abs(firstDelta - 20) < 2 : firstDelta > 20,
     firstDelta.toFixed(0) + " min");

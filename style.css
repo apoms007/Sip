@@ -93,6 +93,18 @@ input{font-family:inherit;}
 .hold-hint{margin:-6px 0 12px;text-align:center;font-size:11px;font-weight:700;color:var(--text-soft);opacity:.8;}
 .grace-note{margin:8px 0 0;font-size:12px;font-weight:800;color:var(--accent);}
 
+/* ---------- today's log ---------- */
+.log-card{background:var(--card);border-radius:26px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow);}
+.log-card h2{font-size:16px;font-weight:900;margin-bottom:10px;}
+.log-list{display:flex;flex-direction:column;gap:7px;max-height:230px;overflow-y:auto;}
+.log-row{display:flex;align-items:center;gap:10px;background:var(--soft-2);border-radius:14px;padding:9px 10px;}
+.log-row .l-emoji{font-size:17px;}
+.log-row .l-amt{font-weight:900;color:var(--deep);font-size:15px;}
+.log-row .l-time{margin-left:auto;font-size:12px;font-weight:700;color:var(--text-soft);}
+.log-del{background:var(--soft);color:var(--deep);width:30px;height:30px;border-radius:10px;font-size:16px;font-weight:900;line-height:1;flex:0 0 auto;}
+.log-del:active{background:var(--accent);color:#fff;}
+.log-empty{font-size:13px;font-weight:700;color:var(--text-soft);text-align:center;padding:8px 0;}
+
 /* ---------- month calendar ---------- */
 .cal-card{background:var(--card);border-radius:26px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow);}
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
