@@ -49,7 +49,9 @@
       </div>
     </section>
 
+    <section class="type-row" id="typeRow"></section>
     <section class="drink-buttons" id="drinkButtons"></section>
+    <p class="hold-hint">Howd a button for a custom amount 🥤</p>
 
     <section class="streak-card">
       <div class="streak-box">
@@ -57,6 +59,7 @@
         <span class="streak-label">day stweak 🔥</span>
         <span class="streak-best" id="streakBest"></span>
       </div>
+      <p class="grace-note hidden" id="graceNote">Mochi fowgave a missed day 💛</p>
     </section>
 
     <section class="wardrobe-card">
@@ -69,6 +72,17 @@
     <section class="chart-card">
       <h2>This week</h2>
       <svg id="weekChart" viewBox="0 0 320 120" class="week-chart"></svg>
+    </section>
+
+    <section class="cal-card">
+      <div class="cal-head">
+        <button id="calPrev" class="cal-nav" aria-label="Previous month">‹</button>
+        <h2 id="calTitle">Month</h2>
+        <button id="calNext" class="cal-nav" aria-label="Next month">›</button>
+      </div>
+      <div class="cal-dow" id="calDow"></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <p class="cal-sum" id="calSum"></p>
     </section>
 
     <section class="notif-card" id="notifCard">
@@ -102,6 +116,33 @@
     </div>
     <p class="backup-hint">Keep a backup so your stweak survives if Chrome cweans its data 🎀</p>
     <input id="importFile" type="file" accept="application/json,.json" hidden>
+  </div>
+</div>
+
+<div id="customSheet" class="sheet hidden">
+  <div class="sheet-inner">
+    <h2>How much did you dwink? 🥤</h2>
+    <input id="customAmt" type="number" min="10" max="3000" step="10" inputmode="numeric">
+    <div class="quick-row">
+      <button class="quick-btn" data-add="-50">−50</button>
+      <button class="quick-btn" data-add="-10">−10</button>
+      <button class="quick-btn" data-add="10">+10</button>
+      <button class="quick-btn" data-add="50">+50</button>
+    </div>
+    <div class="sheet-actions">
+      <button id="customCancel" class="btn-ghost">Cancel</button>
+      <button id="customOk" class="btn-primary">Dwink it!</button>
+    </div>
+  </div>
+</div>
+
+<div id="intro" class="celebrate hidden">
+  <div class="celebrate-inner">
+    <div id="introMascot" class="mascot-slot big"></div>
+    <h2 id="introTitle"></h2>
+    <p id="introBody"></p>
+    <div class="intro-dots" id="introDots"></div>
+    <button id="introNext" class="btn-primary">Next</button>
   </div>
 </div>
 

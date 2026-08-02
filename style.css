@@ -8,8 +8,11 @@
   --text:#4a2c38;
   --text-soft:#8f6474;
   --shadow:0 6px 20px rgba(217,47,94,.12);
+  --ear-in:#ffc5de;
   font-family:ui-rounded,"SF Pro Rounded","Segoe UI Rounded",Nunito,"Trebuchet MS",-apple-system,sans-serif;
 }
+
+/* Dark theme lives at the very end of this file — see the bottom. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);min-height:100%;}
 body{padding-bottom:env(safe-area-inset-bottom);}
@@ -81,6 +84,46 @@ input{font-family:inherit;}
 .stat-sub{color:var(--text-soft);font-weight:700;font-size:15px;margin-top:2px;}
 .stat-remain{margin-top:10px;font-size:13px;font-weight:800;color:var(--accent);background:var(--soft-2);border-radius:11px;padding:6px 10px;display:inline-block;}
 
+/* ---------- drink type chips ---------- */
+.type-row{display:flex;gap:8px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;}
+.type-row::-webkit-scrollbar{display:none;}
+.type-btn{flex:1 0 auto;background:var(--card);border-radius:15px;padding:8px 12px;font-size:13px;font-weight:800;
+  color:var(--text-soft);box-shadow:var(--shadow);border:2.5px solid transparent;white-space:nowrap;}
+.type-btn.on{border-color:var(--accent);color:var(--deep);background:var(--soft-2);}
+.hold-hint{margin:-6px 0 12px;text-align:center;font-size:11px;font-weight:700;color:var(--text-soft);opacity:.8;}
+.grace-note{margin:8px 0 0;font-size:12px;font-weight:800;color:var(--accent);}
+
+/* ---------- month calendar ---------- */
+.cal-card{background:var(--card);border-radius:26px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow);}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.cal-head h2{font-size:16px;font-weight:900;}
+.cal-nav{background:var(--soft-2);color:var(--deep);width:32px;height:32px;border-radius:11px;font-size:19px;font-weight:900;line-height:1;}
+.cal-nav:active{background:var(--soft);}
+.cal-nav[disabled]{opacity:.3;}
+.cal-dow,.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-dow span{text-align:center;font-size:10px;font-weight:800;color:var(--text-soft);padding-bottom:4px;}
+.cal-day{aspect-ratio:1;border-radius:11px;background:var(--soft-2);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--text-soft);}
+.cal-day.blank{background:transparent;}
+.cal-day.hit{background:var(--accent);color:#fff;}
+.cal-day.part{background:var(--soft);color:var(--deep);}
+.cal-day.today{outline:2.5px solid var(--deep);outline-offset:-2.5px;}
+.cal-day .stamp{font-size:11px;line-height:1;}
+.cal-sum{margin:10px 0 0;font-size:12px;font-weight:700;color:var(--text-soft);text-align:center;}
+
+/* ---------- custom amount ---------- */
+.quick-row{display:flex;gap:8px;margin:10px 0 14px;}
+.quick-btn{flex:1;background:var(--soft-2);color:var(--deep);border-radius:13px;padding:10px 0;font-size:14px;font-weight:800;}
+.quick-btn:active{background:var(--soft);}
+#customAmt{width:100%;padding:12px;border-radius:14px;border:2.5px solid var(--soft);font-size:22px;
+  font-weight:900;text-align:center;color:var(--text);background:transparent;}
+#customAmt:focus{outline:none;border-color:var(--accent);}
+
+/* ---------- intro ---------- */
+.intro-dots{display:flex;gap:6px;justify-content:center;margin:12px 0 14px;}
+.intro-dots span{width:7px;height:7px;border-radius:50%;background:var(--soft);}
+.intro-dots span.on{background:var(--accent);width:18px;border-radius:4px;}
+
 /* ---------- drink buttons ---------- */
 .drink-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:14px;}
 .drink-btn{background:var(--card);border-radius:19px;padding:13px 2px 11px;text-align:center;box-shadow:var(--shadow);font-weight:800;color:var(--deep);transition:transform .12s;}
@@ -149,4 +192,36 @@ input{font-family:inherit;}
 
 @media (prefers-reduced-motion:reduce){
   .m-body,.m-eyes,.wave-scroll,.mascot-slot.party .m-body{animation:none !important;}
+}
+
+/* ---------- dark theme ----------
+   Checking a bright pink screen in bed is unpleasant, so follow the phone's
+   dark setting with a deep plum/rose palette rather than a washed-out grey.
+   This block must stay LAST: the panel backgrounds below are hard-coded #fff
+   earlier in the file, and equal-specificity rules are won by whichever comes
+   later. */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1e1622;
+    --card:#2b1f30;
+    --soft:#4a2f43;
+    --soft-2:#38263e;
+    --accent:#ff6f9c;
+    --deep:#ff8fb5;
+    --text:#f6e3ec;
+    --text-soft:#c3a0b3;
+    --shadow:0 6px 20px rgba(0,0,0,.45);
+  }
+  .btn-primary{box-shadow:0 4px 0 #a63b62;}
+  .btn-primary:active{background:#a63b62;box-shadow:0 1px 0 #a63b62;}
+  .sheet-inner,.celebrate-inner{background:var(--card);}
+  .sheet{background:rgba(0,0,0,.6);}
+  .celebrate{background:rgba(0,0,0,.6);}
+  .toast{background:#4a2f43;}
+  /* Mochi is a white cat: on a dark card her outline needs to darken, not glow. */
+  .mascot-slot{filter:saturate(.95);}
+  .scene-sky{background:linear-gradient(#2c4a63,#2b1f30);}
+  .scene-blossom{background:linear-gradient(#4d2a3d,#2b1f30);}
+  .scene-beach{background:linear-gradient(#5a4630,#2f3f4d);}
+  .scene-forest{background:linear-gradient(#26402c,#2b1f30);}
 }

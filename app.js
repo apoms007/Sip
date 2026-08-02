@@ -7,7 +7,18 @@ const STORE_KEY = "sip_state_v2";
 const OLD_KEY = "sip_state_v1";
 const REMINDER_GAP_MS = 90 * 60 * 1000;   // escalating nudges, ~90min apart
 const DEFAULT_SIZES = [150, 250, 350, 500];
-const DRINK_EMOJI = { 150: "🥃", 250: "🥛", 350: "☕", 500: "🍶" };
+
+// Tea and coffee hydrate essentially as well as water — the "coffee dehydrates
+// you" idea doesn't hold at normal intake — so everything counts fully. The
+// type is recorded for interest, not to penalise her.
+const DRINK_TYPES = [
+  { id: "water", name: "Water", emoji: "💧" },
+  { id: "tea", name: "Tea", emoji: "🍵" },
+  { id: "coffee", name: "Coffee", emoji: "☕" },
+  { id: "juice", name: "Juice", emoji: "🧃" },
+];
+const TYPE_BY_ID = {};
+for (const t of DRINK_TYPES) TYPE_BY_ID[t.id] = t;
 
 /* ---------------------------------------------------------------- state */
 function defaultState() {
@@ -18,6 +29,7 @@ function defaultState() {
     unlocked: ["bow_red", "hat_none", "bg_plain"],
     equipped: { bow: "bow_red", hat: "hat_none", bg: "bg_plain" },
     sound: true, onboarded: false, celebratedOn: null, nextNudgeAt: 0,
+    drinkType: "water", seenIntro: false,
   };
 }
 
@@ -66,18 +78,36 @@ function goalDays(totals) {
   return n;
 }
 
+// One missed day per rolling week is forgiven. Losing a month-long streak to a
+// single bad day is the usual reason people quit a streak app for good, and the
+// point here is the habit, not the punishment. The forgiven day doesn't add to
+// the count — it just doesn't end it.
+const GRACE_EVERY_DAYS = 7;
+
 function computeStreak(totals) {
-  let streak = 0;
+  let streak = 0, lastGrace = -Infinity, pendingGrace = false, forgiven = false;
   const now = new Date();
   for (let i = 0; i < 400; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const total = totals.get(dayKey(d.getTime())) || 0;
-    if (total >= state.goalMl) streak++;
-    else if (i === 0) continue;          // today is still in progress
-    else break;
+    if (total >= state.goalMl) {
+      streak++;
+      // Only a grace that actually bridged two good days counts as forgiveness.
+      // The walk always ends on a miss, and spending grace on the blank history
+      // before she installed the app must not claim she missed anything.
+      if (pendingGrace) { forgiven = true; pendingGrace = false; }
+      continue;
+    }
+    if (i === 0) continue;                        // today is still in progress
+    if (i - lastGrace >= GRACE_EVERY_DAYS) {      // spend this week's grace day
+      lastGrace = i;
+      pendingGrace = true;
+      continue;
+    }
+    break;
   }
-  return streak;
+  return { streak, forgiven };
 }
 
 function weekBars(totals) {
@@ -362,7 +392,7 @@ const $ = (id) => document.getElementById(id);
 function render(opts) {
   opts = opts || {};
   const totals = dayTotals();
-  const streak = computeStreak(totals);
+  const { streak, forgiven } = computeStreak(totals);
   const stats = { streak, best: Math.max(streak, state.bestStreak), days: goalDays(totals), ml: lifetimeMl() };
   if (streak > state.bestStreak) state.bestStreak = streak;
 
@@ -379,6 +409,7 @@ function render(opts) {
   $("remainText").textContent = left ? left + " ml to go!" : "Goaw compwete! 🎉";
   $("streakNum").textContent = streak;
   $("streakBest").textContent = state.bestStreak ? "best " + state.bestStreak : "";
+  $("graceNote").classList.toggle("hidden", !(forgiven && streak > 0));
 
   const slot = $("mascotSlot");
   slot.innerHTML = mochiSVG(mood);
@@ -396,14 +427,74 @@ function render(opts) {
   if (!$("bottleSlot").firstChild || opts.rebuildBottle) $("bottleSlot").innerHTML = bottleSVG();
   requestAnimationFrame(() => setWater(total / state.goalMl));
 
-  $("drinkButtons").innerHTML = state.drinkSizes.map(a =>
-    `<button class="drink-btn" data-amt="${a}"><span class="emoji">${DRINK_EMOJI[a] || "💧"}</span><span class="amt">${a}ml</span></button>`).join("");
-  $("drinkButtons").querySelectorAll(".drink-btn").forEach(b =>
-    b.addEventListener("click", () => logDrink(Number(b.dataset.amt))));
-
+  renderTypes();
+  renderDrinkButtons();
   renderWardrobe(stats);
   renderChart(weekBars(totals));
+  renderCalendar(totals);
   $("notifCard").classList.toggle("hidden", notifSettled());
+}
+
+function renderTypes() {
+  $("typeRow").innerHTML = DRINK_TYPES.map(t =>
+    `<button class="type-btn ${state.drinkType === t.id ? "on" : ""}" data-type="${t.id}">${t.emoji} ${t.name}</button>`
+  ).join("");
+  $("typeRow").querySelectorAll(".type-btn").forEach(b => b.addEventListener("click", () => {
+    state.drinkType = b.dataset.type;
+    saveState();
+    buzz(12);
+    render({ keepLine: true });
+  }));
+}
+
+// Tap logs the preset; press and hold opens a custom amount. Holding keeps the
+// home screen uncluttered instead of adding a fifth button to a cramped row.
+const HOLD_MS = 500;
+
+function renderDrinkButtons() {
+  const emoji = (TYPE_BY_ID[state.drinkType] || TYPE_BY_ID.water).emoji;
+  $("drinkButtons").innerHTML = state.drinkSizes.map(a =>
+    `<button class="drink-btn" data-amt="${a}"><span class="emoji">${emoji}</span><span class="amt">${a}ml</span></button>`
+  ).join("");
+
+  $("drinkButtons").querySelectorAll(".drink-btn").forEach(b => {
+    const amt = Number(b.dataset.amt);
+    let timer = null, held = false;
+    const start = () => {
+      held = false;
+      clearTimeout(timer);
+      timer = setTimeout(() => { held = true; buzz(20); openCustom(amt); }, HOLD_MS);
+    };
+    const stop = () => clearTimeout(timer);
+    b.addEventListener("pointerdown", start);
+    ["pointerup", "pointerleave", "pointercancel"].forEach(e => b.addEventListener(e, stop));
+    b.addEventListener("contextmenu", e => e.preventDefault());
+    b.addEventListener("click", () => {
+      if (held) { held = false; return; }        // the hold already opened the sheet
+      logDrink(amt);
+    });
+  });
+}
+
+function openCustom(preset) {
+  $("customAmt").value = preset;
+  $("customSheet").classList.remove("hidden");
+}
+
+function initCustom() {
+  const amtEl = () => $("customAmt");
+  $("customCancel").addEventListener("click", () => $("customSheet").classList.add("hidden"));
+  $("customSheet").querySelectorAll(".quick-btn").forEach(b => b.addEventListener("click", () => {
+    const v = Math.max(10, Math.min(3000, (Number(amtEl().value) || 0) + Number(b.dataset.add)));
+    amtEl().value = v;
+    buzz(10);
+  }));
+  $("customOk").addEventListener("click", () => {
+    const v = Math.round(Number(amtEl().value) || 0);
+    if (!(v >= 10 && v <= 3000)) { showToast("Pick between 10 and 3000 ml 🥺"); return; }
+    $("customSheet").classList.add("hidden");
+    logDrink(v);
+  });
 }
 
 // Bows all share the 🎀 glyph, so draw a real swatch in the item's own colour —
@@ -453,9 +544,9 @@ function renderChart(days) {
 }
 
 /* ------------------------------------------------------------ actions */
-function logDrink(amount) {
+function logDrink(amount, type) {
   const before = todayTotal();
-  state.log.push({ ts: Date.now(), amount });
+  state.log.push({ ts: Date.now(), amount, type: type || state.drinkType || "water" });
   if (state.log.length > 5000) state.log = state.log.slice(-5000);
   state.lastNotified = Date.now();
   state.nextNudgeAt = 0;                 // a real drink outranks any snooze
@@ -547,6 +638,87 @@ function celebrate() {
   }
 }
 
+/* ------------------------------------------------------------ calendar */
+let calMonth = null;   // first day of the month currently on screen
+
+function renderCalendar(totals) {
+  if (!calMonth) { calMonth = new Date(); calMonth.setDate(1); calMonth.setHours(0, 0, 0, 0); }
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+
+  $("calTitle").textContent = calMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  $("calDow").innerHTML = ["M", "T", "W", "T", "F", "S", "S"].map(d => `<span>${d}</span>`).join("");
+
+  const lead = (new Date(y, m, 1).getDay() + 6) % 7;      // weeks start Monday
+  const days = new Date(y, m + 1, 0).getDate();
+  const todayK = dayKey(Date.now());
+  let html = "", hits = 0, ml = 0;
+
+  for (let i = 0; i < lead; i++) html += `<div class="cal-day blank"></div>`;
+  for (let d = 1; d <= days; d++) {
+    const k = dayKey(new Date(y, m, d).getTime());
+    const t = totals.get(k) || 0;
+    const hit = t >= state.goalMl;
+    if (hit) hits++;
+    ml += t;
+    const cls = hit ? "hit" : (t > 0 ? "part" : "");
+    html += `<div class="cal-day ${cls}${k === todayK ? " today" : ""}">` +
+            `<span>${d}</span>${hit ? '<span class="stamp">🎀</span>' : ""}</div>`;
+  }
+
+  $("calGrid").innerHTML = html;
+  $("calSum").textContent = hits + " goaw day" + (hits === 1 ? "" : "s") + " · " + (ml / 1000).toFixed(1) + " L";
+
+  const now = new Date();
+  $("calNext").disabled = (y === now.getFullYear() && m === now.getMonth());
+}
+
+function initCalendar() {
+  const shift = n => {
+    if (!calMonth) return;
+    calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1);
+    renderCalendar(dayTotals());
+  };
+  $("calPrev").addEventListener("click", () => shift(-1));
+  $("calNext").addEventListener("click", () => shift(1));
+}
+
+/* --------------------------------------------------------------- intro */
+// Without this the wardrobe and Mochi's moods are invisible — she would use it
+// as a plain counter and never scroll far enough to find the fun half.
+const INTRO = [
+  { mood: "happy", t: "Tap to dwink! 🥤", b: "Tap a cup evewy time you dwink something. Howd a cup if you want a custom amount." },
+  { mood: "sad", t: "Keep Mochi happy 🥺", b: "If you don't dwink fow a whiwe, Mochi gets sad and thirsty. Dwinking cheews hew wight up!" },
+  { mood: "party", t: "Eawn pwetty things ✨", b: "Hit youw goaw to buiwd a stweak and unwock bows, hats and scenes fow Mochi to weaw." },
+  { mood: "happy", t: "Mochi wiww wemind you 💧", b: "Tuwn on wemindews and Mochi wiww nudge you thwough the day — you can even dwink stwaight fwom the notification!" },
+];
+let introIdx = 0;
+
+function paintIntro() {
+  const s = INTRO[introIdx];
+  $("introMascot").innerHTML = mochiSVG(s.mood);
+  $("introMascot").className = "mascot-slot big" + (s.mood === "sad" ? " sad" : s.mood === "party" ? " party" : "");
+  $("introTitle").textContent = s.t;
+  $("introBody").textContent = s.b;
+  $("introDots").innerHTML = INTRO.map((_, i) => `<span class="${i === introIdx ? "on" : ""}"></span>`).join("");
+  $("introNext").textContent = introIdx === INTRO.length - 1 ? "Wet's dwink! 🎀" : "Next";
+}
+
+function showIntro() {
+  introIdx = 0;
+  paintIntro();
+  $("intro").classList.remove("hidden");
+}
+
+function initIntro() {
+  $("introNext").addEventListener("click", () => {
+    if (introIdx < INTRO.length - 1) { introIdx++; paintIntro(); return; }
+    state.seenIntro = true;
+    saveState();
+    $("intro").classList.add("hidden");
+    render();
+  });
+}
+
 function showToast(msg) {
   const t = $("toast");
   t.textContent = msg;
@@ -574,6 +746,7 @@ function initOnboarding() {
     $("onboard").classList.add("hidden");
     $("app").classList.remove("hidden");
     render();
+    showIntro();
   };
   $("onboardGo").addEventListener("click", go);
   $("onboardName").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
@@ -845,8 +1018,16 @@ function boot() {
   initOnboarding();
   initSettings();
   initNotifications();
-  if (state.onboarded) { $("app").classList.remove("hidden"); render(); }
-  else $("onboard").classList.remove("hidden");
+  initCustom();
+  initCalendar();
+  initIntro();
+  if (state.onboarded) {
+    $("app").classList.remove("hidden");
+    render();
+    if (!state.seenIntro) showIntro();      // existing users get it once too
+  } else {
+    $("onboard").classList.remove("hidden");
+  }
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && state.onboarded) render({ keepLine: true });
   });
