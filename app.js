@@ -384,12 +384,19 @@ function mochiSVG(mood) {
   // A pink outline keeps the white cat readable on both the plain white card
   // and the dark "night" scene.
   const OL = `stroke="#f2b9d1" stroke-width="3.5" stroke-linejoin="round"`;
+  // Ears and whiskers sit in their own transform groups (rather than as loose
+  // shapes in m-body) purely so CSS can twitch each one independently — the SVG
+  // output is otherwise unchanged, so hats/bows still line up exactly as before.
   return `<svg viewBox="0 0 300 250" xmlns="http://www.w3.org/2000/svg"><g class="m-body">
-    <polygon points="70,106 100,28 130,110" fill="#fff" ${OL}/><polygon points="170,110 200,28 230,106" fill="#fff" ${OL}/>
-    <polygon points="82,100 100,48 118,102" fill="#ffc5de"/><polygon points="182,102 200,48 218,100" fill="#ffc5de"/>
+    <g class="m-ear-l"><polygon points="70,106 100,28 130,110" fill="#fff" ${OL}/>
+      <polygon points="82,100 100,48 118,102" fill="#ffc5de"/></g>
+    <g class="m-ear-r"><polygon points="170,110 200,28 230,106" fill="#fff" ${OL}/>
+      <polygon points="182,102 200,48 218,100" fill="#ffc5de"/></g>
     <ellipse cx="150" cy="152" rx="100" ry="80" fill="#fff" ${OL}/>
-    <g stroke="#d9b3c1" stroke-width="3" stroke-linecap="round">
+    <g class="m-whiskers-l" stroke="#d9b3c1" stroke-width="3" stroke-linecap="round">
       <line x1="14" y1="142" x2="80" y2="148"/><line x1="10" y1="162" x2="78" y2="162"/><line x1="14" y1="182" x2="80" y2="176"/>
+    </g>
+    <g class="m-whiskers-r" stroke="#d9b3c1" stroke-width="3" stroke-linecap="round">
       <line x1="286" y1="142" x2="220" y2="148"/><line x1="290" y1="162" x2="222" y2="162"/><line x1="286" y1="182" x2="220" y2="176"/>
     </g>
     ${blush}${eyesFor(mood)}
@@ -607,7 +614,10 @@ function render(opts) {
   const fresh = refreshUnlocks(stats);
   if (fresh.length) { saveState(); showUnlock(fresh[0]); }
 
-  const total = totals.get(dayKey(Date.now())) || 0;
+  // dayTotals() is keyed by dayStart (a number), not dayKey (a string) — looking
+  // it up with the wrong key type silently yields undefined, which reads as a
+  // zero total and blanks the whole screen.
+  const total = totals.get(dayStart(Date.now())) || 0;
   const mood = moodFor(total);
 
   $("greetText").textContent = "Hi, " + (state.name || "cutie") + " 🎀";
@@ -901,6 +911,44 @@ function sparkle() {
     layer.appendChild(s);
     setTimeout(() => s.remove(), 1400);
   }
+}
+
+// A tap directly on Mochi (separate from logging a drink) is pure affection —
+// no state changes, no stats, nothing to unlock. Scoped to the main screen's
+// mascot only: the onboarding/intro/celebrate cats are transient and passed
+// through quickly, so petting there would rarely be seen.
+const PET_LINES = [
+  "Mochi puwws so happiwy! 😻", "Aww, wight thewe! 💕",
+  "Mochi weans into youw hand! 🥰", "So many pets! Mochi is mewting! 💖",
+];
+
+function petMascot() {
+  const slot = $("mascotSlot");
+  void slot.offsetWidth;                        // restart the animation on repeat taps
+  slot.classList.add("petted");
+  setTimeout(() => slot.classList.remove("petted"), 700);
+  buzz(10);
+  petSparkle();
+  $("mascotLine").textContent = line(PET_LINES);
+}
+
+function petSparkle() {
+  const layer = $("sparkleLayer");
+  for (let i = 0; i < 4; i++) {
+    const s = document.createElement("span");
+    s.className = "sparkle";
+    s.textContent = pick(["💕", "💗", "✨"]);
+    s.style.left = (18 + Math.random() * 64) + "%";
+    s.style.top = (30 + Math.random() * 30) + "%";
+    s.style.animationDelay = (i * 0.06) + "s";
+    layer.appendChild(s);
+    setTimeout(() => s.remove(), 1400);
+  }
+}
+
+function initPet() {
+  const slot = $("mascotSlot");
+  if (slot) slot.addEventListener("click", petMascot);
 }
 
 function celebrate() {
@@ -1482,6 +1530,7 @@ function boot() {
   initNotifications();
   initCustom();
   initBattery();
+  initPet();
   initCalendar();
   initIntro();
   if (state.onboarded) {

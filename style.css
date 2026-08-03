@@ -102,6 +102,42 @@ input{font-family:inherit;}
 .mascot-slot.party .m-body{animation:party .7s ease-in-out infinite;}
 @keyframes party{0%,100%{transform:rotate(-5deg) translateY(0)}50%{transform:rotate(5deg) translateY(-9px)}}
 
+/* ---------- idle liveliness ----------
+   Twitches sit in a narrow window at the end of a long cycle (the same trick as
+   blink), so each one reads as a spontaneous flick rather than a loop. The
+   durations are deliberately coprime-ish so the ears, whiskers and blink drift
+   out of phase instead of firing together and looking mechanical. */
+.m-ear-l{transform-origin:100px 108px;animation:earTwitchL 7.3s ease-in-out infinite;}
+.m-ear-r{transform-origin:200px 108px;animation:earTwitchR 9.7s ease-in-out infinite;}
+@keyframes earTwitchL{0%,88%,100%{transform:rotate(0)}91%{transform:rotate(-8deg)}94.5%{transform:rotate(3deg)}}
+@keyframes earTwitchR{0%,91%,100%{transform:rotate(0)}94%{transform:rotate(8deg)}97%{transform:rotate(-3deg)}}
+
+.m-whiskers-l{transform-origin:80px 162px;animation:whiskerL 11.3s ease-in-out infinite;}
+.m-whiskers-r{transform-origin:220px 162px;animation:whiskerR 13.9s ease-in-out infinite;}
+@keyframes whiskerL{0%,93%,100%{transform:rotate(0)}95.5%{transform:rotate(-4deg)}98%{transform:rotate(2deg)}}
+@keyframes whiskerR{0%,94%,100%{transform:rotate(0)}96.5%{transform:rotate(4deg)}99%{transform:rotate(-2deg)}}
+
+/* ---------- mood expression in the ears ----------
+   Ears carry most of a cat's mood, so they override the idle twitch rather than
+   competing with it. */
+.mascot-slot.sad .m-ear-l{animation:none;transform:rotate(-15deg) translateY(5px);}
+.mascot-slot.sad .m-ear-r{animation:none;transform:rotate(15deg) translateY(5px);}
+.mascot-slot.party .m-ear-l{animation:earFlapL .7s ease-in-out infinite;}
+.mascot-slot.party .m-ear-r{animation:earFlapR .7s ease-in-out infinite;}
+@keyframes earFlapL{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(4deg)}}
+@keyframes earFlapR{0%,100%{transform:rotate(6deg)}50%{transform:rotate(-4deg)}}
+
+/* ---------- petting ---------- */
+#mascotSlot{cursor:pointer;}
+.mascot-slot.petted .m-body{animation:petSquish .7s cubic-bezier(.3,1.4,.5,1);}
+@keyframes petSquish{0%{transform:scale(1)}30%{transform:scale(1.05,.95) translateY(5px)}
+  60%{transform:scale(.99,1.01) translateY(-3px)}100%{transform:scale(1)}}
+/* Eyes squeeze shut the way a cat's do when it leans into a hand. */
+.mascot-slot.petted .m-eyes{animation:petSquint .7s ease-in-out;}
+@keyframes petSquint{0%,100%{transform:scaleY(1)}35%,75%{transform:scaleY(.15)}}
+.mascot-slot.petted .m-ear-l{animation:none;transform:rotate(-11deg);}
+.mascot-slot.petted .m-ear-r{animation:none;transform:rotate(11deg);}
+
 .sparkle-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
 .sparkle{position:absolute;font-size:20px;animation:floatUp 1.1s ease-out forwards;}
 @keyframes floatUp{0%{opacity:0;transform:translateY(0) scale(.5)}25%{opacity:1}100%{opacity:0;transform:translateY(-70px) scale(1.25)}}
@@ -250,7 +286,10 @@ input{font-family:inherit;}
 @keyframes dropIn{from{opacity:0;transform:translate(-50%,-26px)}to{opacity:1;transform:translate(-50%,0)}}
 
 @media (prefers-reduced-motion:reduce){
-  .m-body,.m-eyes,.wave-scroll,.mascot-slot.party .m-body{animation:none !important;}
+  .m-body,.m-eyes,.wave-scroll,.mascot-slot.party .m-body,
+  .m-ear-l,.m-ear-r,.m-whiskers-l,.m-whiskers-r,
+  .mascot-slot.party .m-ear-l,.mascot-slot.party .m-ear-r,
+  .mascot-slot.petted .m-body,.mascot-slot.petted .m-eyes{animation:none !important;}
 }
 
 /* ---------- theme switching ----------
