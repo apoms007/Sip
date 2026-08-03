@@ -29,7 +29,7 @@ function defaultState() {
     unlocked: ["bow_red", "hat_none", "bg_plain"],
     equipped: { bow: "bow_red", hat: "hat_none", bg: "bg_plain" },
     sound: true, onboarded: false, celebratedOn: null, nextNudgeAt: 0,
-    drinkType: "water", seenIntro: false,
+    drinkType: "water", seenIntro: false, theme: "auto",
   };
 }
 
@@ -137,6 +137,14 @@ const ITEMS = [
   { id: "bow_xmas",   type: "bow", name: "Holly",   chip: "🎄", color: "#2e9e5b", req: { season: [11, 1, 11, 31] } },
   { id: "bow_spooky", type: "bow", name: "Spooky",  chip: "🎃", color: "#ff8c20", req: { season: [9, 20, 9, 31] } },
   { id: "bow_love",   type: "bow", name: "Love",    chip: "💗", color: "#ff2d6f", req: { season: [1, 7, 1, 20] }, pattern: "dots" },
+  // Long-haul items: without these the wardrobe runs dry around day 30 and the
+  // streak stops buying anything, which is where a habit app usually loses her.
+  { id: "bow_ocean",  type: "bow", name: "Ocean",   chip: "🎀", color: "#2fa8c9", req: { days: 40 } },
+  { id: "bow_star",   type: "bow", name: "Stawwy",  chip: "🎀", color: "#7c6ce8", req: { streak: 45 }, pattern: "stars" },
+  { id: "bow_candy",  type: "bow", name: "Candy",   chip: "🎀", color: "#ff6fb5", req: { days: 55 }, pattern: "hearts" },
+  { id: "bow_aurora", type: "bow", name: "Auwowa",  chip: "✨", color: "#43d6b5", req: { streak: 60 }, pattern: "glitter" },
+  { id: "bow_rose",   type: "bow", name: "Wose",    chip: "🌹", color: "#c9304f", req: { ml: 60000 } },
+  { id: "bow_royal",  type: "bow", name: "Woyaw",   chip: "👑", color: "#5b3fd6", req: { streak: 100 }, pattern: "stars" },
 
   { id: "hat_none",   type: "hat", name: "None",    chip: "🚫", req: {} },
   { id: "hat_flower", type: "hat", name: "Flowers", chip: "🌸", req: { days: 3 } },
@@ -145,6 +153,11 @@ const ITEMS = [
   { id: "hat_phones", type: "hat", name: "Phones",  chip: "🎧", req: { days: 20 } },
   { id: "hat_crown",  type: "hat", name: "Crown",   chip: "👑", req: { streak: 21 } },
   { id: "hat_santa",  type: "hat", name: "Santa",   chip: "🎅", req: { season: [11, 1, 11, 31] } },
+  { id: "hat_bunny",  type: "hat", name: "Bunny",   chip: "🐰", req: { days: 35 } },
+  { id: "hat_star",   type: "hat", name: "Staw",    chip: "⭐", req: { streak: 45 } },
+  { id: "hat_moon",   type: "hat", name: "Moon",    chip: "🌙", req: { days: 60 } },
+  { id: "hat_wizard", type: "hat", name: "Wizawd",  chip: "🧙", req: { streak: 75 } },
+  { id: "hat_halo",   type: "hat", name: "Hawo",    chip: "😇", req: { streak: 150 } },
 
   { id: "bg_plain",   type: "bg", name: "Plain",    chip: "⬜", req: {} },
   { id: "bg_sky",     type: "bg", name: "Sky",      chip: "☁️", req: { days: 2 } },
@@ -152,6 +165,11 @@ const ITEMS = [
   { id: "bg_forest",  type: "bg", name: "Forest",   chip: "🌲", req: { days: 12 } },
   { id: "bg_night",   type: "bg", name: "Night",    chip: "🌙", req: { streak: 10 } },
   { id: "bg_beach",   type: "bg", name: "Beach",    chip: "🏖️", req: { days: 25 } },
+  { id: "bg_sunset",  type: "bg", name: "Sunset",   chip: "🌇", req: { days: 35 } },
+  { id: "bg_galaxy",  type: "bg", name: "Gawaxy",   chip: "🌌", req: { streak: 45 } },
+  { id: "bg_rainbow", type: "bg", name: "Wainbow",  chip: "🌈", req: { days: 70 } },
+  { id: "bg_aurora",  type: "bg", name: "Auwowa",   chip: "🌠", req: { streak: 90 } },
+  { id: "bg_cloud9",  type: "bg", name: "Cwoud 9",  chip: "☁️", req: { days: 120 } },
 ];
 
 const ITEM_BY_ID = {};
@@ -227,6 +245,10 @@ function bowSVG(item) {
             <circle cx="22" cy="-6" r="3.2" fill="#fff" opacity=".85"/><circle cx="13" cy="7" r="3.2" fill="#fff" opacity=".85"/>`;
   } else if (item.pattern === "glitter") {
     deco = `<text x="-26" y="2" font-size="11">✨</text><text x="14" y="4" font-size="11">✨</text>`;
+  } else if (item.pattern === "stars") {
+    deco = `<text x="-27" y="3" font-size="10">⭐</text><text x="15" y="3" font-size="10">⭐</text>`;
+  } else if (item.pattern === "hearts") {
+    deco = `<text x="-27" y="3" font-size="10">💗</text><text x="15" y="3" font-size="10">💗</text>`;
   }
   // Sits on the outer edge of the left ear so the ear tip still shows above it.
   return `<g transform="translate(84 80)">
@@ -264,6 +286,24 @@ function hatSVG(item) {
       return `<path d="M78 92 q10 -68 78 -64 q58 4 66 38 q-44 36 -144 26 z" fill="#e8354f"/>
               <rect x="70" y="82" width="158" height="21" rx="10.5" fill="#fff"/>
               <circle cx="228" cy="66" r="15" fill="#fff"/>`;
+    case "hat_bunny":
+      return `<ellipse cx="118" cy="40" rx="15" ry="44" fill="#fff" stroke="#f2b9d1" stroke-width="3"/>
+              <ellipse cx="182" cy="40" rx="15" ry="44" fill="#fff" stroke="#f2b9d1" stroke-width="3"/>
+              <ellipse cx="118" cy="42" rx="7" ry="31" fill="#ffc5de"/>
+              <ellipse cx="182" cy="42" rx="7" ry="31" fill="#ffc5de"/>`;
+    case "hat_star":
+      return `<path d="M62 96 q88 -44 176 0" stroke="#ffc23d" stroke-width="9" fill="none" stroke-linecap="round"/>
+              <polygon points="150,24 158,51 187,51 163,68 172,95 150,78 128,95 137,68 113,51 142,51"
+                fill="#ffd95e" stroke="#e8a715" stroke-width="2.5" stroke-linejoin="round"/>`;
+    case "hat_moon":
+      return `<path d="M62 96 q88 -44 176 0" stroke="#b0a5e8" stroke-width="9" fill="none" stroke-linecap="round"/>
+              <path d="M164 26 a30 30 0 1 0 2 56 a24 24 0 1 1 -2 -56 z" fill="#ffe9a8" stroke="#e0c46a" stroke-width="2.5"/>`;
+    case "hat_wizard":
+      return `<path d="M92 96 L150 10 L208 96 z" fill="#5b3fd6"/>
+              <ellipse cx="150" cy="96" rx="68" ry="13" fill="#7c5ce8"/>
+              <text x="127" y="72" font-size="17">✨</text>`;
+    case "hat_halo":
+      return `<ellipse cx="150" cy="34" rx="42" ry="12" fill="none" stroke="#ffe27a" stroke-width="8"/>`;
     default: return "";
   }
 }
@@ -338,11 +378,83 @@ function setWater(pct) {
 // {n} is swapped for whatever name she enters at onboarding, so no personal
 // name is baked into the source.
 const LINES = {
-  party:   ["Wa-hoo!! You did it, {n}! 🎉", "Mochi is SO pwoud of you! 🥰", "Bestest dwinking evew, {n}! ✨"],
-  happy:   ["Nom nom, watew is yummy! 💕", "Yay {n}! Suchhh a good sip! 🎀", "Mochi feews aww bubbwy now! 🫧"],
-  neutral: ["Mochi wants a wittle sip pwease! 🥺", "{n}, sippy sip? Mochi is waiting! 🎀", "Watew time, pwetty pwease? 💧"],
-  sad:     ["{n}... Mochi is vewy thirsty... 🥺", "Y-you forgot Mochi... *sniff* 😿", "So dwy... needs watew... 💔"],
+  party: [
+    "Wa-hoo!! You did it, {n}! 🎉", "Mochi is SO pwoud of you! 🥰", "Bestest dwinking evew, {n}! ✨",
+    "Goaw compwete! Mochi is dancing! 💃", "You dwank it aww, {n}! 🏆",
+    "Mochi's heawt is so fuww wight now! 💖", "Suchhh a good hooman! 🎀",
+    "We did it togethew, {n}! 🥳", "Mochi is doing a happy wiggwe! 🎊",
+    "Aww that watew! Mochi is amazed! 😻", "{n} is the vewy best, no contest! 👑",
+    "Mochi wants to cewebwate with you! 🎉",
+  ],
+  happy: [
+    "Nom nom, watew is yummy! 💕", "Yay {n}! Suchhh a good sip! 🎀", "Mochi feews aww bubbwy now! 🫧",
+    "That was a pewfect sip! ✨", "Mochi is so happy wight now! 😊",
+    "Gwug gwug! Mowe pwease! 💧", "{n} is taking suchhh good cawe! 🥰",
+    "Mochi's tummy is aww happy! 💕", "Wovewy wittle dwink! 🎀",
+    "Mochi did a happy wiggwe! 🐱", "You'we doing gweat, {n}! 🌟",
+    "Mochi feews aww spawkwy! ✨",
+  ],
+  neutral: [
+    "Mochi wants a wittle sip pwease! 🥺", "{n}, sippy sip? Mochi is waiting! 🎀", "Watew time, pwetty pwease? 💧",
+    "Mochi is just sitting hewe... 👀", "Maybe a wittle dwink, {n}? 🥤",
+    "Mochi's cup is wooking empty! 🥛", "Psssst... {n}... watew? 💧",
+    "A tiny sip wouwd be so nice! 🎀", "Mochi is being vewy patient! 😌",
+    "Don't fowget to dwink, {n}! 💕", "Mochi is thinking about watew... 💭",
+    "Just one wittle sip? 🥺",
+  ],
+  sad: [
+    "{n}... Mochi is vewy thirsty... 🥺", "Y-you forgot Mochi... *sniff* 😿", "So dwy... needs watew... 💔",
+    "Mochi has been waiting so wong... 😢", "*sad wittle meow* 😿",
+    "{n}, did you fowget about Mochi? 💔", "Mochi's whiskews awe aww dwoopy... 😔",
+    "It's been fowevew, {n}... 🥺", "Mochi weawwy needs watew pwease... 💧",
+    "So vewy thirsty... hewp? 😿", "Mochi misses youw sips... 💔",
+    "*tiny thirsty noises* 🥺",
+  ],
 };
+
+// Situational lines outrank the plain mood pools so Mochi reacts to what just
+// happened instead of drawing at random. First match wins, so these are ordered
+// most-specific first. `chance` keeps the ambient ones (time of day) from
+// crowding the mood lines out entirely; the rare earned moments always fire.
+const SITUATIONS = [
+  { chance: 1, when: c => c.newBest, lines: [
+    "{n}!! That's youw best stweak EVEW! 🏆", "New wecowd! {s} days! Mochi is amazed! 🤩",
+    "Nobody stweaks wike you, {n}! ✨", "Best stweak evew! Mochi is shook! 😻",
+  ] },
+  { chance: 1, when: c => c.comeback, lines: [
+    "{n}! You came back! Mochi missed you! 🥹", "Mochi waited and waited... hewwo! 💕",
+    "Thewe you awe! Mochi was wonewy! 🎀", "Wewcome back, {n}! Wet's dwink! ✨",
+  ] },
+  { chance: 1, when: c => c.firstToday, lines: [
+    "Fiwst sip of the day! 🎀", "Yay! {n}'s vewy fiwst dwink! ☀️",
+    "Stawting the day wight! Mochi appwoves! 💕", "Fiwst one down, many mowe to go! 💧",
+  ] },
+  { chance: 1, when: c => c.toGo > 0 && c.toGo <= 250, lines: [
+    "Sooo cwose, {n}! Just a bit mowe! 🔥", "Almost thewe! Mochi can feew it! ✨",
+    "One mowe sip and we did it! 🎯", "{n}, the goaw is wight thewe! 👀",
+  ] },
+  { chance: .7, when: c => c.type === "tea", lines: [
+    "Tea time! Mochi wuvs the smeww! 🍵", "Cozy wittle tea sip! 🫖", "Tea counts too, {n}! 💕",
+  ] },
+  { chance: .7, when: c => c.type === "coffee", lines: [
+    "Coffee! Mochi feews awake now! ☕", "Zoom zoom coffee sip! ⚡", "Coffee is watew too, {n}! 💕",
+  ] },
+  { chance: .7, when: c => c.type === "juice", lines: [
+    "Juicy! Mochi wikes this one! 🧃", "Sweet wittle sip! 🍊", "Juice is yummy, {n}! 💕",
+  ] },
+  { chance: .45, when: c => c.streak >= 7, lines: [
+    "{s} days in a wow, {n}! Mochi is impwessed! 🔥", "Stweak of {s}! Unstoppabwe! ⚡",
+    "{s} whowe days! Mochi is so pwoud! 💖",
+  ] },
+  { chance: .5, when: c => c.hour >= 22 || c.hour < 5, lines: [
+    "Sleepy sip! Don't stay up too wate, {n}! 🌙", "Mochi is getting sweepy... 😴",
+    "Wate night watew! Mochi appwoves! ⭐", "Shhh... quiet wittle night sip! 🌛",
+  ] },
+  { chance: .4, when: c => c.hour >= 5 && c.hour < 11, lines: [
+    "Good mowning, {n}! 🌅", "Mochi woke up thinking about watew! ☀️",
+    "Mowning sips awe the best sips! 🐦",
+  ] },
+];
 // three escalation tiers, matched to how long the bottle has sat untouched
 const NUDGES = [
   ["{n}, sippy sip time? 🎀", "Mochi wants watew pwease! 💧", "Just a wittle dwink, {n}? 🥺"],
@@ -351,8 +463,40 @@ const NUDGES = [
 ];
 
 function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
-function fill(s) { return s.replace(/\{n\}/g, state.name || "cutie"); }
-function line(arr) { return fill(pick(arr)); }
+function fill(s, ctx) {
+  return s.replace(/\{n\}/g, state.name || "cutie")
+          .replace(/\{s\}/g, ctx && ctx.streak != null ? String(ctx.streak) : "");
+}
+function line(arr, ctx) { return fill(pick(arr), ctx); }
+
+// `justLogged` is inferred from how recently the newest entry landed, so opening
+// the app hours later falls back to a plain mood line instead of congratulating
+// her on a drink she has long since forgotten about.
+function lineContext(total, mood, streak, newBest) {
+  const now = Date.now();
+  const today = dayKey(now);
+  const last = state.log[state.log.length - 1];
+  const prev = state.log[state.log.length - 2];
+  let todayCount = 0;
+  for (const e of state.log) if (dayKey(e.ts) === today) todayCount++;
+  return {
+    mood, streak, newBest,
+    hour: new Date(now).getHours(),
+    toGo: Math.max(0, state.goalMl - total),
+    firstToday: todayCount === 1,
+    comeback: !!(last && prev && last.ts - prev.ts > 36 * 3600000),
+    type: last && now - last.ts < 60000 ? last.type : null,
+  };
+}
+
+function lineFor(ctx) {
+  for (const s of SITUATIONS) {
+    if (!s.when(ctx)) continue;
+    if (s.chance < 1 && Math.random() > s.chance) continue;
+    return line(s.lines, ctx);
+  }
+  return line(LINES[ctx.mood], ctx);
+}
 
 function moodFor(total) {
   if (total >= state.goalMl) return "party";
@@ -394,6 +538,9 @@ function render(opts) {
   const totals = dayTotals();
   const { streak, forgiven } = computeStreak(totals);
   const stats = { streak, best: Math.max(streak, state.bestStreak), days: goalDays(totals), ml: lifetimeMl() };
+  // Captured before bestStreak is overwritten below. Requires a previous best so
+  // her very first day reads as a start, not as beating a record of zero.
+  const newBest = state.bestStreak > 0 && streak > state.bestStreak;
   if (streak > state.bestStreak) state.bestStreak = streak;
 
   const fresh = refreshUnlocks(stats);
@@ -419,7 +566,7 @@ function render(opts) {
     slot.classList.add("react");
     setTimeout(() => slot.classList.remove("react"), 620);
   }
-  if (!opts.keepLine) $("mascotLine").textContent = line(LINES[mood]);
+  if (!opts.keepLine) $("mascotLine").textContent = lineFor(lineContext(total, mood, streak, newBest));
 
   const bg = equippedItem("bg");
   $("mascotCard").className = "mascot-card" + (bg && bg.id !== "bg_plain" ? " scene-" + bg.id.slice(3) : "");
@@ -791,6 +938,33 @@ function initOnboarding() {
 }
 
 /* ------------------------------------------------------------ settings */
+// "auto" leaves the attribute off entirely so the prefers-color-scheme media
+// query keeps control; light/dark stamp it and override the system either way.
+function applyTheme() {
+  const t = state.theme || "auto";
+  if (t === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", t);
+}
+
+function renderThemeRow() {
+  const row = $("themeRow");
+  if (!row) return;
+  row.querySelectorAll(".theme-btn").forEach(b =>
+    b.classList.toggle("on", (state.theme || "auto") === b.dataset.theme));
+}
+
+function initTheme() {
+  const row = $("themeRow");
+  if (!row) return;
+  row.querySelectorAll(".theme-btn").forEach(b => b.addEventListener("click", () => {
+    state.theme = b.dataset.theme;
+    saveState();
+    applyTheme();          // applied straight away so the choice is visible behind the sheet
+    renderThemeRow();
+    buzz(12);
+  }));
+}
+
 function initSettings() {
   $("settingsBtn").addEventListener("click", () => {
     $("setName").value = state.name || "";
@@ -799,6 +973,7 @@ function initSettings() {
     $("setEnd").value = state.activeEnd;
     $("setSizes").value = state.drinkSizes.join(", ");
     $("setSound").checked = !!state.sound;
+    renderThemeRow();
     $("settings").classList.remove("hidden");
   });
   $("setCancel").addEventListener("click", () => $("settings").classList.add("hidden"));
@@ -1092,8 +1267,10 @@ function boot() {
   // Ask the browser not to evict us under storage pressure — everything she has
   // ever logged lives in localStorage and there is no server-side copy.
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  applyTheme();
   initOnboarding();
   initSettings();
+  initTheme();
   initNotifications();
   initCustom();
   initBattery();

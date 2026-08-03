@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sip">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 
@@ -114,6 +114,13 @@
       </div>
     </label>
     <label>Drink sizes (ml, comma separated)<input id="setSizes" type="text"></label>
+    <label>Theme
+      <div class="theme-row" id="themeRow">
+        <button type="button" class="theme-btn" data-theme="auto">Auto</button>
+        <button type="button" class="theme-btn" data-theme="light">Light</button>
+        <button type="button" class="theme-btn" data-theme="dark">Dark</button>
+      </div>
+    </label>
     <label class="row-label"><input id="setSound" type="checkbox"> Sound on</label>
     <div class="sheet-actions">
       <button id="setCancel" class="btn-ghost">Cancel</button>
@@ -167,6 +174,6 @@
 <div id="unlockToast" class="unlock-toast hidden"></div>
 <div id="toast" class="toast hidden"></div>
 
-<script src="app.js?v=2"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

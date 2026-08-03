@@ -13,6 +13,25 @@
   --input-text:#d92f5e;
   --shadow:0 6px 20px rgba(217,47,94,.12);
   --ear-in:#ffc5de;
+  /* Everything the dark theme changes is routed through a variable, so the dark
+     block at the bottom of this file stays a pure list of values with no
+     duplicated component rules. */
+  --sheet-bg:#ffffff;
+  --overlay:rgba(74,44,56,.4);
+  --celebrate-overlay:rgba(255,77,126,.35);
+  --toast-bg:#4a2c38;
+  --btn-shadow:#d92f5e;
+  --mascot-filter:none;
+  --scene-sky:linear-gradient(#cfeafd,#ffffff);
+  --scene-blossom:linear-gradient(#ffdcec,#fff8fb);
+  --scene-night:linear-gradient(#332f57,#57406e);
+  --scene-beach:linear-gradient(#ffe6bf 55%,#a9e2ff);
+  --scene-forest:linear-gradient(#d6f2d8,#f4fff5);
+  --scene-sunset:linear-gradient(#ffb37a,#ffe0cb);
+  --scene-galaxy:linear-gradient(#241b47,#4b2f6e);
+  --scene-rainbow:linear-gradient(#ffd6e0,#d9f0ff);
+  --scene-aurora:linear-gradient(#1f3a4d,#2f6d63);
+  --scene-cloud9:linear-gradient(#dbeafe,#ffffff);
   font-family:ui-rounded,"SF Pro Rounded","Segoe UI Rounded",Nunito,"Trebuchet MS",-apple-system,sans-serif;
 }
 
@@ -34,8 +53,8 @@ input{font-family:inherit;}
 #onboardName{width:100%;padding:13px 14px;border-radius:15px;border:2.5px solid var(--soft);font-size:16px;margin-bottom:16px;text-align:center;color:var(--input-text);background:#fff;}
 #onboardName:focus{outline:none;border-color:var(--accent);}
 
-.btn-primary{background:var(--accent);color:#fff;padding:13px 20px;border-radius:17px;font-size:16px;font-weight:800;width:100%;box-shadow:0 4px 0 var(--deep);}
-.btn-primary:active{background:var(--deep);transform:translateY(3px);box-shadow:0 1px 0 var(--deep);}
+.btn-primary{background:var(--accent);color:#fff;padding:13px 20px;border-radius:17px;font-size:16px;font-weight:800;width:100%;box-shadow:0 4px 0 var(--btn-shadow);}
+.btn-primary:active{background:var(--btn-shadow);transform:translateY(3px);box-shadow:0 1px 0 var(--btn-shadow);}
 .btn-ghost{background:var(--soft);color:var(--deep);padding:13px 20px;border-radius:17px;font-size:16px;font-weight:800;width:100%;}
 
 /* ---------- topbar ---------- */
@@ -46,18 +65,25 @@ input{font-family:inherit;}
 
 /* ---------- mascot ---------- */
 .mascot-card{position:relative;background:var(--card);border-radius:26px;padding:16px;text-align:center;margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden;transition:background .4s ease;}
-.mascot-slot{width:110px;height:100px;margin:0 auto;}
+.mascot-slot{width:110px;height:100px;margin:0 auto;filter:var(--mascot-filter);}
 .mascot-slot.big{width:190px;height:172px;}
 .mascot-slot svg{width:100%;height:100%;overflow:visible;}
 .mascot-line{margin:6px 0 0;color:var(--text-soft);font-size:15px;font-weight:700;min-height:21px;transition:color .3s;}
 
 /* scenes */
-.scene-sky{background:linear-gradient(#cfeafd,#ffffff);}
-.scene-blossom{background:linear-gradient(#ffdcec,#fff8fb);}
-.scene-night{background:linear-gradient(#332f57,#57406e);}
+.scene-sky{background:var(--scene-sky);}
+.scene-blossom{background:var(--scene-blossom);}
+.scene-night{background:var(--scene-night);}
 .scene-night .mascot-line{color:#ffd9ea;}
-.scene-beach{background:linear-gradient(#ffe6bf 55%,#a9e2ff);}
-.scene-forest{background:linear-gradient(#d6f2d8,#f4fff5);}
+.scene-beach{background:var(--scene-beach);}
+.scene-forest{background:var(--scene-forest);}
+.scene-sunset{background:var(--scene-sunset);}
+.scene-galaxy{background:var(--scene-galaxy);}
+.scene-galaxy .mascot-line{color:#e0d4ff;}
+.scene-rainbow{background:var(--scene-rainbow);}
+.scene-aurora{background:var(--scene-aurora);}
+.scene-aurora .mascot-line{color:#c6f6e6;}
+.scene-cloud9{background:var(--scene-cloud9);}
 
 /* mascot animation states */
 .m-body{transform-origin:150px 200px;animation:breathe 3.4s ease-in-out infinite;}
@@ -178,8 +204,8 @@ input{font-family:inherit;}
 .notif-card p{margin:0 0 11px;color:var(--text-soft);font-size:14px;font-weight:700;}
 
 /* ---------- settings sheet ---------- */
-.sheet{position:fixed;inset:0;background:rgba(74,44,56,.4);display:flex;align-items:flex-end;z-index:20;}
-.sheet-inner{background:#fff;width:100%;max-width:480px;margin:0 auto;border-radius:26px 26px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;}
+.sheet{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:flex-end;z-index:20;}
+.sheet-inner{background:var(--sheet-bg);width:100%;max-width:480px;margin:0 auto;border-radius:26px 26px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;}
 .sheet-inner h2{font-size:19px;font-weight:900;margin-bottom:14px;}
 .sheet-inner label{display:block;font-size:12px;color:var(--text-soft);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:13px;}
 .sheet-inner input[type=text],.sheet-inner input[type=number]{width:100%;padding:11px 12px;border-radius:13px;border:2.5px solid var(--soft);font-size:15px;margin-top:6px;color:var(--input-text);background:#fff;}
@@ -194,15 +220,15 @@ input{font-family:inherit;}
 .backup-hint{font-size:11px;color:var(--text-soft);text-align:center;margin:8px 0 0;font-weight:700;}
 
 /* ---------- celebrate ---------- */
-.celebrate{position:fixed;inset:0;background:rgba(255,77,126,.35);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:40;padding:24px;}
-.celebrate-inner{background:#fff;border-radius:30px;padding:26px 22px;text-align:center;max-width:330px;width:100%;box-shadow:0 14px 40px rgba(217,47,94,.3);}
+.celebrate{position:fixed;inset:0;background:var(--celebrate-overlay);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:40;padding:24px;}
+.celebrate-inner{background:var(--sheet-bg);border-radius:30px;padding:26px 22px;text-align:center;max-width:330px;width:100%;box-shadow:0 14px 40px rgba(217,47,94,.3);}
 .celebrate-inner h2{font-size:22px;font-weight:900;margin-top:6px;}
 .celebrate-inner p{color:var(--text-soft);font-weight:700;margin:6px 0 16px;}
 .confetti{position:fixed;top:-20px;font-size:18px;animation:fall linear forwards;z-index:41;pointer-events:none;}
 @keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:.85}}
 
 /* ---------- toasts ---------- */
-.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--text);color:#fff;padding:11px 18px;border-radius:15px;font-size:14px;font-weight:700;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.22);max-width:88%;text-align:center;}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--toast-bg);color:#fff;padding:11px 18px;border-radius:15px;font-size:14px;font-weight:700;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.22);max-width:88%;text-align:center;}
 .unlock-toast{position:fixed;left:50%;top:20px;transform:translateX(-50%);background:var(--accent);color:#fff;padding:12px 20px;border-radius:17px;font-size:14px;font-weight:800;z-index:31;box-shadow:0 8px 22px rgba(217,47,94,.35);animation:dropIn .45s cubic-bezier(.3,1.5,.5,1);text-align:center;max-width:88%;}
 @keyframes dropIn{from{opacity:0;transform:translate(-50%,-26px)}to{opacity:1;transform:translate(-50%,0)}}
 
@@ -210,14 +236,17 @@ input{font-family:inherit;}
   .m-body,.m-eyes,.wave-scroll,.mascot-slot.party .m-body{animation:none !important;}
 }
 
-/* ---------- dark theme ----------
-   Checking a bright pink screen in bed is unpleasant, so follow the phone's
-   dark setting with a deep plum/rose palette rather than a washed-out grey.
-   This block must stay LAST: the panel backgrounds below are hard-coded #fff
-   earlier in the file, and equal-specificity rules are won by whichever comes
-   later. */
+/* ---------- theme switching ----------
+   Settings offers Auto / Light / Dark. Auto leaves data-theme off the root so
+   the media query decides; picking Light or Dark stamps the attribute and wins
+   over it in both directions.
+
+   The palette below is intentionally repeated for the two selectors: CSS has no
+   way to share one declaration block between a media query and an attribute
+   selector, and keeping it as a flat list of variables (rather than duplicated
+   component rules) is what keeps that repetition cheap. Change both halves. */
 @media (prefers-color-scheme: dark){
-  :root{
+  :root:not([data-theme="light"]){
     --bg:#1e1622;
     --card:#2b1f30;
     --soft:#4a2f43;
@@ -227,17 +256,48 @@ input{font-family:inherit;}
     --text:#f6e3ec;
     --text-soft:#c3a0b3;
     --shadow:0 6px 20px rgba(0,0,0,.45);
+    --sheet-bg:#2b1f30;
+    --overlay:rgba(0,0,0,.6);
+    --celebrate-overlay:rgba(0,0,0,.6);
+    --toast-bg:#4a2f43;
+    --btn-shadow:#a63b62;
+    /* Mochi is a white cat: on a dark card her outline needs to darken, not glow. */
+    --mascot-filter:saturate(.95);
+    --scene-sky:linear-gradient(#2c4a63,#2b1f30);
+    --scene-blossom:linear-gradient(#4d2a3d,#2b1f30);
+    --scene-beach:linear-gradient(#5a4630,#2f3f4d);
+    --scene-forest:linear-gradient(#26402c,#2b1f30);
+    --scene-sunset:linear-gradient(#5c3320,#2b1f30);
+    --scene-rainbow:linear-gradient(#4a2d3a,#2b1f30);
+    --scene-cloud9:linear-gradient(#2f3d52,#2b1f30);
   }
-  .btn-primary{box-shadow:0 4px 0 #a63b62;}
-  .btn-primary:active{background:#a63b62;box-shadow:0 1px 0 #a63b62;}
-  .sheet-inner,.celebrate-inner{background:var(--card);}
-  .sheet{background:rgba(0,0,0,.6);}
-  .celebrate{background:rgba(0,0,0,.6);}
-  .toast{background:#4a2f43;}
-  /* Mochi is a white cat: on a dark card her outline needs to darken, not glow. */
-  .mascot-slot{filter:saturate(.95);}
-  .scene-sky{background:linear-gradient(#2c4a63,#2b1f30);}
-  .scene-blossom{background:linear-gradient(#4d2a3d,#2b1f30);}
-  .scene-beach{background:linear-gradient(#5a4630,#2f3f4d);}
-  .scene-forest{background:linear-gradient(#26402c,#2b1f30);}
 }
+:root[data-theme="dark"]{
+  --bg:#1e1622;
+  --card:#2b1f30;
+  --soft:#4a2f43;
+  --soft-2:#38263e;
+  --accent:#ff6f9c;
+  --deep:#ff8fb5;
+  --text:#f6e3ec;
+  --text-soft:#c3a0b3;
+  --shadow:0 6px 20px rgba(0,0,0,.45);
+  --sheet-bg:#2b1f30;
+  --overlay:rgba(0,0,0,.6);
+  --celebrate-overlay:rgba(0,0,0,.6);
+  --toast-bg:#4a2f43;
+  --btn-shadow:#a63b62;
+  --mascot-filter:saturate(.95);
+  --scene-sky:linear-gradient(#2c4a63,#2b1f30);
+  --scene-blossom:linear-gradient(#4d2a3d,#2b1f30);
+  --scene-beach:linear-gradient(#5a4630,#2f3f4d);
+  --scene-forest:linear-gradient(#26402c,#2b1f30);
+  --scene-sunset:linear-gradient(#5c3320,#2b1f30);
+  --scene-rainbow:linear-gradient(#4a2d3a,#2b1f30);
+  --scene-cloud9:linear-gradient(#2f3d52,#2b1f30);
+}
+
+/* ---------- theme picker ---------- */
+.theme-row{display:flex;gap:8px;margin-top:6px;}
+.theme-btn{flex:1;background:var(--soft-2);color:var(--deep);border-radius:13px;padding:10px 0;font-size:14px;font-weight:800;border:2.5px solid transparent;text-transform:none;letter-spacing:normal;}
+.theme-btn.on{border-color:var(--accent);background:var(--soft);}

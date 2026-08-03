@@ -1,5 +1,8 @@
-const CACHE = "sip-shell-v2";
-const SHELL = ["./", "index.html", "style.css?v=2", "app.js?v=2", "manifest.json",
+// Bump CACHE alongside the ?v= query in index.html whenever app.js or style.css
+// change: activate() drops every cache that is not this one, which is what
+// evicts the previous build instead of leaving a stale copy to be served.
+const CACHE = "sip-shell-v3";
+const SHELL = ["./", "index.html", "style.css?v=3", "app.js?v=3", "manifest.json",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
