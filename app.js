@@ -29,7 +29,7 @@ function defaultState() {
     unlocked: ["bow_red", "hat_none", "bg_plain"],
     equipped: { bow: "bow_red", hat: "hat_none", bg: "bg_plain" },
     sound: true, onboarded: false, celebratedOn: null, nextNudgeAt: 0,
-    drinkType: "water", seenIntro: false, theme: "auto",
+    drinkType: "water", seenIntro: false, theme: "auto", goalHistory: [],
   };
 }
 
@@ -62,19 +62,75 @@ function dayKey(ts) {
   return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
 }
 
+// Day totals are keyed by local midnight rather than dayKey: the key has to be
+// numerically comparable so each day can be matched against the goal that was
+// actually in force on it (dayKey is unpadded and sorts wrong).
+function dayStart(ts) {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
 function dayTotals() {
   const m = new Map();
-  for (const e of state.log) m.set(dayKey(e.ts), (m.get(dayKey(e.ts)) || 0) + e.amount);
+  for (const e of state.log) {
+    const k = dayStart(e.ts);
+    m.set(k, (m.get(k) || 0) + e.amount);
+  }
   return m;
 }
 
-function todayTotal() { return dayTotals().get(dayKey(Date.now())) || 0; }
+function todayTotal() { return dayTotals().get(dayStart(Date.now())) || 0; }
 function lastLogTs() { return state.log.length ? state.log[state.log.length - 1].ts : 0; }
 function lifetimeMl() { return state.log.reduce((s, e) => s + e.amount, 0); }
 
+/* ----------------------------------------------------------- goal history */
+// Judging past days by whatever the goal happens to be today means raising the
+// goal silently wipes the streak and every calendar stamp she earned — which
+// punishes exactly the ambition the app is meant to encourage. So the goal is
+// kept as a timeline and each day is judged by the value in force back then.
+// (It also stops the reverse: lowering the goal can't retroactively invent a
+// streak she never actually ran.)
+function ensureGoalHistory() {
+  if (!Array.isArray(state.goalHistory)) state.goalHistory = [];
+  const h = state.goalHistory;
+  if (!h.length) {
+    // Migration for anyone already using the app: treat her whole existing
+    // history as having been run at the current goal, so nothing visibly moves
+    // the moment this ships.
+    const first = state.log.length ? dayStart(state.log[0].ts) : dayStart(Date.now());
+    h.push({ from: first, goalMl: state.goalMl });
+    return;
+  }
+  h.sort((a, b) => a.from - b.from);
+  // A goal changed outside setGoal (an imported backup, older data) would leave
+  // the timeline disagreeing with state.goalMl; record it as changing today
+  // rather than rewriting days that already happened.
+  if (h[h.length - 1].goalMl !== state.goalMl) setGoal(state.goalMl);
+}
+
+function setGoal(goalMl) {
+  state.goalMl = goalMl;
+  const today = dayStart(Date.now());
+  const h = state.goalHistory;
+  if (h.length && h[h.length - 1].from === today) h[h.length - 1].goalMl = goalMl;
+  else h.push({ from: today, goalMl: goalMl });
+}
+
+function goalFor(dayTs) {
+  const h = state.goalHistory;
+  if (!h || !h.length) return state.goalMl;
+  let g = h[0].goalMl;
+  for (const entry of h) {
+    if (entry.from > dayTs) break;
+    g = entry.goalMl;
+  }
+  return g;
+}
+
 function goalDays(totals) {
   let n = 0;
-  for (const v of totals.values()) if (v >= state.goalMl) n++;
+  for (const [day, v] of totals) if (v >= goalFor(day)) n++;
   return n;
 }
 
@@ -90,8 +146,9 @@ function computeStreak(totals) {
   for (let i = 0; i < 400; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    const total = totals.get(dayKey(d.getTime())) || 0;
-    if (total >= state.goalMl) {
+    const dayTs = dayStart(d.getTime());
+    const total = totals.get(dayTs) || 0;
+    if (total >= goalFor(dayTs)) {
       streak++;
       // Only a grace that actually bridged two good days counts as forgiveness.
       // The walk always ends on a miss, and spending grace on the blank history
@@ -116,9 +173,13 @@ function weekBars(totals) {
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
+    const dayTs = dayStart(d.getTime());
     out.push({
-      label: d.toLocaleDateString(undefined, { weekday: "short" })[0],
-      total: totals.get(dayKey(d.getTime())) || 0,
+      // Two letters, because single initials collide: Tue/Thu and Sat/Sun both
+      // render as one ambiguous letter.
+      label: d.toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2),
+      total: totals.get(dayTs) || 0,
+      goal: goalFor(dayTs),
     });
   }
   return out;
@@ -678,12 +739,14 @@ function renderWardrobe(stats) {
 function renderChart(days) {
   const max = Math.max(state.goalMl, ...days.map(d => d.total)) || 1;
   const barW = 28, gap = (320 - barW * 7) / 8;
+  // The dashed line marks today's goal; each bar is still judged against the
+  // goal that applied on its own day.
   const goalY = 96 - (state.goalMl / max) * 86;
   let svg = `<line x1="0" y1="${goalY}" x2="320" y2="${goalY}" stroke="#ff4d7e" stroke-width="1.5" stroke-dasharray="5 5" opacity=".6"/>`;
   days.forEach((d, i) => {
     const x = gap + i * (barW + gap);
     const h = Math.max(5, (d.total / max) * 86), y = 96 - h;
-    const hit = d.total >= state.goalMl;
+    const hit = d.total >= d.goal;
     svg += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="9" fill="${hit ? "#ff4d7e" : "#ffd0e2"}"/>`;
     if (hit) svg += `<text x="${x + barW / 2}" y="${y - 5}" font-size="11" text-anchor="middle">✨</text>`;
     svg += `<text x="${x + barW / 2}" y="112" font-size="11" fill="#8f6474" font-weight="700" text-anchor="middle">${d.label}</text>`;
@@ -716,6 +779,7 @@ function logDrink(amount, type) {
 function removeEntry(idx) {
   if (idx < 0 || idx >= state.log.length) return;
   const gone = state.log[idx];
+  const hadCelebrated = state.celebratedOn;
   state.log.splice(idx, 1);
   // A mis-tap that had pushed her over the goal should let the celebration fire
   // again once she genuinely gets there.
@@ -726,8 +790,41 @@ function removeEntry(idx) {
   saveState();
   buzz(15);
   render();
+  if (daySheetTs !== null) renderDaySheet();
   if (NATIVE) scheduleNative();          // the last-drink time may have moved
-  showToast("Wemoved " + gone.amount + "ml 💧");
+  showUndo("Wemoved " + gone.amount + "ml 💧", gone, hadCelebrated);
+}
+
+// Undo rather than a confirm dialog: deleting a mis-tap is common enough that a
+// prompt every time would be its own annoyance, and the tap target is small.
+let pendingUndo = null;
+
+function showUndo(msg, entry, celebratedOn) {
+  pendingUndo = { entry, celebratedOn };
+  $("undoText").textContent = msg;
+  $("undoToast").classList.remove("hidden");
+  clearTimeout(showUndo._h);
+  showUndo._h = setTimeout(hideUndo, 6000);
+}
+
+function hideUndo() {
+  pendingUndo = null;
+  $("undoToast").classList.add("hidden");
+}
+
+function undoRemove() {
+  if (!pendingUndo) return;
+  const { entry, celebratedOn } = pendingUndo;
+  state.log.push(entry);
+  state.log.sort((a, b) => a.ts - b.ts);   // a restored past drink must sit back in order
+  state.celebratedOn = celebratedOn;
+  state.nextNudgeAt = 0;
+  hideUndo();
+  saveState();
+  buzz(15);
+  render();
+  if (daySheetTs !== null) renderDaySheet();
+  if (NATIVE) scheduleNative();
 }
 
 function renderTodayLog() {
@@ -783,6 +880,7 @@ function importBackup(file) {
     const when = data.log.length ? new Date(data.log[data.log.length - 1].ts).toLocaleDateString() : "empty";
     if (!confirm("Restore this backup (last drink: " + when + ")?\n\nIt replaces what is currently on this phone.")) return;
     state = Object.assign(defaultState(), data);
+    ensureGoalHistory();      // older backups predate the goal timeline
     saveState();
     render({ rebuildBottle: true });
     showToast("Westored! 🎀");
@@ -826,27 +924,42 @@ function celebrate() {
 /* ------------------------------------------------------------ calendar */
 let calMonth = null;   // first day of the month currently on screen
 
+// Built from the locale so the calendar header and the week chart agree. Jan 1
+// 2024 was a Monday, which is where the week starts here.
+const DOW_LABELS = (() => {
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(2024, 0, 1 + i);
+    out.push(d.toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2));
+  }
+  return out;
+})();
+
 function renderCalendar(totals) {
   if (!calMonth) { calMonth = new Date(); calMonth.setDate(1); calMonth.setHours(0, 0, 0, 0); }
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
 
   $("calTitle").textContent = calMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  $("calDow").innerHTML = ["M", "T", "W", "T", "F", "S", "S"].map(d => `<span>${d}</span>`).join("");
+  $("calDow").innerHTML = DOW_LABELS.map(d => `<span>${d}</span>`).join("");
 
   const lead = (new Date(y, m, 1).getDay() + 6) % 7;      // weeks start Monday
   const days = new Date(y, m + 1, 0).getDate();
-  const todayK = dayKey(Date.now());
+  const todayTs = dayStart(Date.now());
   let html = "", hits = 0, ml = 0;
 
   for (let i = 0; i < lead; i++) html += `<div class="cal-day blank"></div>`;
   for (let d = 1; d <= days; d++) {
-    const k = dayKey(new Date(y, m, d).getTime());
+    const k = dayStart(new Date(y, m, d).getTime());
     const t = totals.get(k) || 0;
-    const hit = t >= state.goalMl;
+    const hit = t >= goalFor(k);
     if (hit) hits++;
     ml += t;
-    const cls = hit ? "hit" : (t > 0 ? "part" : "");
-    html += `<div class="cal-day ${cls}${k === todayK ? " today" : ""}">` +
+    const future = k > todayTs;
+    const cls = (hit ? "hit" : (t > 0 ? "part" : "")) + (future ? " future" : "");
+    // Only past and present days are tappable; data-ts is what the delegated
+    // handler keys off, so future cells simply carry none.
+    html += `<div class="cal-day ${cls}${k === todayTs ? " today" : ""}"` +
+            (future ? "" : ` data-ts="${k}" role="button" tabindex="0" aria-label="Edit ${d}"`) + ">" +
             `<span>${d}</span>${hit ? '<span class="stamp">🎀</span>' : ""}</div>`;
   }
 
@@ -865,6 +978,90 @@ function initCalendar() {
   };
   $("calPrev").addEventListener("click", () => shift(-1));
   $("calNext").addEventListener("click", () => shift(1));
+  // Delegated: the grid is rebuilt on every render, so per-cell listeners would
+  // have to be reattached each time.
+  $("calGrid").addEventListener("click", e => {
+    const cell = e.target.closest(".cal-day[data-ts]");
+    if (cell) openDay(Number(cell.dataset.ts));
+  });
+}
+
+/* ------------------------------------------------------- day editor sheet */
+// Forgetting to log is the normal case, and until now a missed drink was simply
+// unrecoverable — which could cost her a streak she had actually earned.
+let daySheetTs = null;
+
+function openDay(dayTs) {
+  if (dayTs > dayStart(Date.now())) return;   // nothing to record in the future
+  daySheetTs = dayTs;
+  renderDaySheet();
+  $("daySheet").classList.remove("hidden");
+}
+
+function closeDay() {
+  daySheetTs = null;
+  $("daySheet").classList.add("hidden");
+}
+
+function renderDaySheet() {
+  const ts = daySheetTs;
+  if (ts === null) return;
+  const d = new Date(ts);
+  const isToday = ts === dayStart(Date.now());
+  $("dayTitle").textContent = isToday
+    ? "Today"
+    : d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+
+  const rows = [];
+  state.log.forEach((e, i) => { if (dayStart(e.ts) === ts) rows.push({ e, i }); });
+  const total = rows.reduce((s, r) => s + r.e.amount, 0);
+  const goal = goalFor(ts);
+  $("daySummary").textContent = total + " / " + goal + " ml" + (total >= goal ? "  🎀" : "");
+
+  rows.reverse();
+  $("dayList").innerHTML = rows.length
+    ? rows.map(({ e, i }) => {
+        const t = TYPE_BY_ID[e.type] || TYPE_BY_ID.water;
+        const time = new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        return `<div class="log-row">
+          <span class="l-emoji">${t.emoji}</span>
+          <span class="l-amt">${e.amount}ml</span>
+          <span class="l-time">${time}</span>
+          <button class="log-del" data-idx="${i}" aria-label="Remove ${e.amount}ml">×</button>
+        </div>`;
+      }).join("")
+    : `<p class="log-empty">Nothing wogged this day 🎀</p>`;
+
+  $("dayList").querySelectorAll(".log-del").forEach(b =>
+    b.addEventListener("click", () => removeEntry(Number(b.dataset.idx))));
+
+  $("dayAddRow").innerHTML = state.drinkSizes
+    .map(a => `<button class="quick-btn" data-add="${a}">+${a}</button>`).join("");
+  $("dayAddRow").querySelectorAll(".quick-btn").forEach(b =>
+    b.addEventListener("click", () => addDrinkAt(ts, Number(b.dataset.add))));
+}
+
+// Past entries land at midday. The exact time has no effect on goals, streaks or
+// unlocks — only the day's total does — so asking her for one would be friction
+// with nothing behind it.
+function addDrinkAt(dayTs, amount) {
+  const d = new Date(dayTs);
+  d.setHours(12, 0, 0, 0);
+  let ts = d.getTime();
+  while (state.log.some(e => e.ts === ts)) ts++;   // keep timestamps distinct
+  state.log.push({ ts, amount, type: state.drinkType || "water" });
+  state.log.sort((a, b) => a.ts - b.ts);
+  if (state.log.length > 5000) state.log = state.log.slice(-5000);
+  saveState();
+  playPop();
+  render();
+  renderDaySheet();
+  if (NATIVE) scheduleNative();
+}
+
+function initDaySheet() {
+  $("dayClose").addEventListener("click", closeDay);
+  $("daySheet").addEventListener("click", e => { if (e.target.id === "daySheet") closeDay(); });
 }
 
 /* --------------------------------------------------------------- intro */
@@ -985,7 +1182,9 @@ function initSettings() {
   });
   $("setSave").addEventListener("click", () => {
     state.name = $("setName").value.trim() || state.name;
-    state.goalMl = Math.max(500, Number($("setGoal").value) || state.goalMl);
+    // Via setGoal so the change is recorded from today rather than rewriting
+    // every day she has already finished.
+    setGoal(Math.max(500, Number($("setGoal").value) || state.goalMl));
     state.activeStart = Math.min(23, Math.max(0, Number($("setStart").value) || 0));
     state.activeEnd = Math.min(23, Math.max(0, Number($("setEnd").value) || 22));
     const sizes = $("setSizes").value.split(",").map(s => Number(s.trim())).filter(n => n > 0 && n < 3000);
@@ -1053,13 +1252,20 @@ function notifSettled() {
   return !("Notification" in window) || Notification.permission === "granted";
 }
 
-// Push a moment into her waking window: too early waits for activeStart, too
-// late rolls to the next morning.
+// An overnight window (start > end, e.g. 22:00–06:00 on a night shift) wraps
+// past midnight, so "inside the window" is not a single numeric range.
+function inActiveWindow(h) {
+  const s = state.activeStart, e = state.activeEnd;
+  if (s === e) return true;                       // degenerate setting: treat as all day
+  return s < e ? (h >= s && h < e) : (h >= s || h < e);
+}
+
+// Push a moment into her waking window. Advancing an hour at a time handles the
+// wrapping case correctly; comparing against start/end directly used to collapse
+// an overnight window down to a single reminder per day.
 function clampToActive(d) {
-  if (d.getHours() < state.activeStart) { d.setHours(state.activeStart, 0, 0, 0); return d; }
-  if (d.getHours() >= state.activeEnd) {
-    d.setDate(d.getDate() + 1);
-    d.setHours(state.activeStart, 0, 0, 0);
+  for (let i = 0; i < 48 && !inActiveWindow(d.getHours()); i++) {
+    d.setHours(d.getHours() + 1, 0, 0, 0);
   }
   return d;
 }
@@ -1221,8 +1427,7 @@ function initNotifications() {
 
 function checkReminder() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const hour = new Date().getHours();
-  if (hour < state.activeStart || hour >= state.activeEnd) return;
+  if (!inActiveWindow(new Date().getHours())) return;
   if (todayTotal() >= state.goalMl) return;
   const sinceLog = Date.now() - (lastLogTs() || 0);
   const sinceNotify = Date.now() - (state.lastNotified || 0);
@@ -1267,10 +1472,13 @@ function boot() {
   // Ask the browser not to evict us under storage pressure — everything she has
   // ever logged lives in localStorage and there is no server-side copy.
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  ensureGoalHistory();
   applyTheme();
   initOnboarding();
   initSettings();
   initTheme();
+  initDaySheet();
+  $("undoBtn").addEventListener("click", undoRemove);
   initNotifications();
   initCustom();
   initBattery();

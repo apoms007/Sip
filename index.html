@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sip">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -152,6 +152,19 @@
   </div>
 </div>
 
+<div id="daySheet" class="sheet hidden">
+  <div class="sheet-inner">
+    <h2 id="dayTitle">Day</h2>
+    <p id="daySummary" class="day-summary"></p>
+    <div class="log-list" id="dayList"></div>
+    <p class="day-add-label">Add a dwink you fowgot 🎀</p>
+    <div class="quick-row" id="dayAddRow"></div>
+    <div class="sheet-actions">
+      <button id="dayClose" class="btn-primary">Done</button>
+    </div>
+  </div>
+</div>
+
 <div id="intro" class="celebrate hidden">
   <div class="celebrate-inner">
     <div id="introMascot" class="mascot-slot big"></div>
@@ -173,7 +186,11 @@
 
 <div id="unlockToast" class="unlock-toast hidden"></div>
 <div id="toast" class="toast hidden"></div>
+<div id="undoToast" class="toast undo-toast hidden">
+  <span id="undoText"></span>
+  <button id="undoBtn" type="button">Undo</button>
+</div>
 
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

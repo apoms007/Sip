@@ -6,7 +6,12 @@
   --accent:#ff4d7e;
   --deep:#d92f5e;
   --text:#4a2c38;
-  --text-soft:#8f6474;
+  /* Darkened from #8f6474: the old value sat at ~4.2:1 on white and failed the
+     4.5:1 contrast floor for the timestamps and hints that use it. */
+  --text-soft:#7a5061;
+  /* --accent on the tinted chip background is only 2.7:1, so anything small and
+     pink on a tint uses this instead. */
+  --accent-strong:#b02348;
   /* Text inputs keep a plain white box in both themes (never re-skinned for
      dark mode), so their text needs its own color that stays a solid, readable
      pink instead of following --text into a pale near-white in dark mode. */
@@ -112,7 +117,7 @@ input{font-family:inherit;}
 .stat-main{font-size:42px;font-weight:900;line-height:1;color:var(--deep);}
 .stat-unit{font-size:18px;font-weight:800;margin-left:3px;}
 .stat-sub{color:var(--text-soft);font-weight:700;font-size:15px;margin-top:2px;}
-.stat-remain{margin-top:10px;font-size:13px;font-weight:800;color:var(--accent);background:var(--soft-2);border-radius:11px;padding:6px 10px;display:inline-block;}
+.stat-remain{margin-top:10px;font-size:13px;font-weight:800;color:var(--accent-strong);background:var(--soft-2);border-radius:11px;padding:6px 10px;display:inline-block;}
 
 /* ---------- drink type chips ---------- */
 .type-row{display:flex;gap:8px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;}
@@ -131,7 +136,9 @@ input{font-family:inherit;}
 .log-row .l-emoji{font-size:17px;}
 .log-row .l-amt{font-weight:900;color:var(--deep);font-size:15px;}
 .log-row .l-time{margin-left:auto;font-size:12px;font-weight:700;color:var(--text-soft);}
-.log-del{background:var(--soft);color:var(--deep);width:30px;height:30px;border-radius:10px;font-size:16px;font-weight:900;line-height:1;flex:0 0 auto;}
+/* 30px was under the ~44px tap-target floor for a destructive control; paired
+   with the undo toast rather than a confirm dialog. */
+.log-del{background:var(--soft);color:var(--deep);width:44px;height:44px;border-radius:13px;font-size:19px;font-weight:900;line-height:1;flex:0 0 auto;}
 .log-del:active{background:var(--accent);color:#fff;}
 .log-empty{font-size:13px;font-weight:700;color:var(--text-soft);text-align:center;padding:8px 0;}
 
@@ -139,7 +146,7 @@ input{font-family:inherit;}
 .cal-card{background:var(--card);border-radius:26px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow);}
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
 .cal-head h2{font-size:16px;font-weight:900;}
-.cal-nav{background:var(--soft-2);color:var(--deep);width:32px;height:32px;border-radius:11px;font-size:19px;font-weight:900;line-height:1;}
+.cal-nav{background:var(--soft-2);color:var(--deep);width:44px;height:44px;border-radius:13px;font-size:21px;font-weight:900;line-height:1;}
 .cal-nav:active{background:var(--soft);}
 .cal-nav[disabled]{opacity:.3;}
 .cal-dow,.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
@@ -150,6 +157,9 @@ input{font-family:inherit;}
 .cal-day.hit{background:var(--accent);color:#fff;}
 .cal-day.part{background:var(--soft);color:var(--deep);}
 .cal-day.today{outline:2.5px solid var(--deep);outline-offset:-2.5px;}
+.cal-day[data-ts]{cursor:pointer;}
+.cal-day[data-ts]:active{transform:scale(.9);}
+.cal-day.future{opacity:.35;}
 .cal-day .stamp{font-size:11px;line-height:1;}
 .cal-sum{margin:10px 0 0;font-size:12px;font-weight:700;color:var(--text-soft);text-align:center;}
 
@@ -187,12 +197,14 @@ input{font-family:inherit;}
 .ward-group h3{font-size:12px;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;}
 .ward-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
 .ward-row::-webkit-scrollbar{display:none;}
-.ward-item{flex:0 0 auto;width:64px;min-height:66px;border-radius:16px;background:var(--soft-2);padding:6px 3px;text-align:center;border:2.5px solid transparent;transition:transform .12s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;}
+.ward-item{flex:0 0 auto;width:74px;min-height:76px;border-radius:16px;background:var(--soft-2);padding:7px 4px;text-align:center;border:2.5px solid transparent;transition:transform .12s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
 .ward-item:active{transform:scale(.92);}
 .ward-item.equipped{border-color:var(--accent);background:var(--soft);}
 .ward-item.locked{opacity:.55;}
 .ward-item .chip{font-size:20px;line-height:1.1;}
-.ward-item .cap{display:block;font-size:8.5px;font-weight:800;color:var(--text-soft);line-height:1.2;word-break:break-word;}
+/* Was 8.5px: this is the text telling her what a locked item costs, so it has
+   to be legible rather than decorative. */
+.ward-item .cap{display:block;font-size:10.5px;font-weight:800;color:var(--text);line-height:1.2;word-break:break-word;}
 
 /* ---------- chart ---------- */
 .chart-card{background:var(--card);border-radius:26px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow);}
@@ -214,7 +226,12 @@ input{font-family:inherit;}
 .row-label input{width:20px;height:20px;accent-color:var(--accent);}
 .hour-row{display:flex;align-items:center;gap:8px;}
 .sheet-actions{display:flex;gap:10px;}
-.undo-btn{margin-top:10px;background:var(--soft-2);font-size:14px;}
+/* ---------- day editor + undo ---------- */
+.day-summary{margin:0 0 12px;font-size:15px;font-weight:800;color:var(--accent-strong);}
+.day-add-label{margin:14px 0 8px;font-size:12px;font-weight:800;color:var(--text-soft);text-transform:uppercase;letter-spacing:.05em;}
+#dayList{margin-bottom:4px;}
+.undo-toast{display:flex;align-items:center;gap:14px;}
+#undoBtn{background:transparent;color:#ffd9ea;font-weight:900;font-size:14px;padding:6px 2px;text-decoration:underline;flex:0 0 auto;}
 .backup-row{display:flex;gap:10px;margin-top:10px;}
 .backup-row .btn-ghost{background:var(--soft-2);font-size:14px;}
 .backup-hint{font-size:11px;color:var(--text-soft);text-align:center;margin:8px 0 0;font-weight:700;}
@@ -255,6 +272,9 @@ input{font-family:inherit;}
     --deep:#ff8fb5;
     --text:#f6e3ec;
     --text-soft:#c3a0b3;
+    /* The light-mode value is a dark red — unreadable on a dark chip, so dark
+       mode needs the opposite direction, not the same colour. */
+    --accent-strong:#ff8fb5;
     --shadow:0 6px 20px rgba(0,0,0,.45);
     --sheet-bg:#2b1f30;
     --overlay:rgba(0,0,0,.6);
@@ -281,6 +301,7 @@ input{font-family:inherit;}
   --deep:#ff8fb5;
   --text:#f6e3ec;
   --text-soft:#c3a0b3;
+  --accent-strong:#ff8fb5;
   --shadow:0 6px 20px rgba(0,0,0,.45);
   --sheet-bg:#2b1f30;
   --overlay:rgba(0,0,0,.6);
