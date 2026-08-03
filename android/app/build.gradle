@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+// Release signing is driven entirely from the environment so the keystore never
+// lives in the repo. CI decodes it from a secret; a build without those vars set
+// still succeeds and just produces an unsigned release APK.
+def storeFilePath = System.getenv("SIP_KEYSTORE_FILE")
+def hasReleaseSigning = storeFilePath != null && !storeFilePath.isEmpty() && file(storeFilePath).exists()
+
 android {
     namespace "com.mochisip.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +13,11 @@ android {
         applicationId "com.mochisip.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Each build must carry a higher versionCode than the one already on her
+        // phone or Android refuses to install it as an update. CI feeds the run
+        // number in; a local build falls back to 1.
+        versionCode (System.getenv("SIP_VERSION_CODE") ?: "1").toInteger()
+        versionName System.getenv("SIP_VERSION_NAME") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +25,22 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    if (hasReleaseSigning) {
+        signingConfigs {
+            release {
+                storeFile file(storeFilePath)
+                storePassword System.getenv("SIP_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("SIP_KEY_ALIAS")
+                keyPassword System.getenv("SIP_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) signingConfig signingConfigs.release
         }
     }
 }

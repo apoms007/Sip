@@ -7,6 +7,12 @@ android/.gradle/
 android/local.properties
 android/app/src/main/assets/public/
 *.apk
+# Signing keys must never reach the repo — it is public, and anyone holding the
+# key could publish an "update" that installs straight over hers.
+*.jks
+*.keystore
+keystore.base64.txt
+keystore.password.txt
 __pycache__/
 *.pyc
 Thumbs.db

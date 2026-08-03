@@ -1,7 +1,11 @@
 name: Build Android APK
 
-# Builds the installable APK in the cloud so no Android SDK is needed locally.
-# Grab the artifact from the run's summary page once it goes green.
+# Builds the installable APK in the cloud so no Android SDK is needed locally,
+# then publishes it as a GitHub Release. The newest APK is always reachable at
+# a fixed address, which is the link she can be sent once and keep:
+#
+#   https://github.com/apoms007/Sip/releases/latest/download/sip.apk
+#
 on:
   workflow_dispatch:
   push:
@@ -9,9 +13,19 @@ on:
     paths-ignore:
       - "README.md"
 
+permissions:
+  contents: write        # publishing a Release writes to the repo
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # The secrets context can't be used in an `if:` directly, so the presence
+      # of a signing key is resolved to a plain string here first.
+      HAS_KEYSTORE: ${{ secrets.SIP_KEYSTORE_BASE64 != '' }}
+      SIP_VERSION_CODE: ${{ github.run_number }}
+      SIP_VERSION_NAME: 1.0.${{ github.run_number }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -37,14 +51,56 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Decode signing keystore
+        if: env.HAS_KEYSTORE == 'true'
+        run: echo "${{ secrets.SIP_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/sip-release.jks"
+
+      # Without a keystore the release APK would be unsigned and refuse to
+      # install, so fall back to the debug build rather than shipping something
+      # broken. Run the keystore workflow once to get real releases.
+      - name: Build APK
         working-directory: android
+        env:
+          SIP_KEYSTORE_FILE: ${{ runner.temp }}/sip-release.jks
+          SIP_KEYSTORE_PASSWORD: ${{ secrets.SIP_KEYSTORE_PASSWORD }}
+          SIP_KEY_ALIAS: sip
+          SIP_KEY_PASSWORD: ${{ secrets.SIP_KEYSTORE_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          if [ "$HAS_KEYSTORE" = "true" ]; then
+            ./gradlew --no-daemon assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/sip.apk"
+          else
+            echo "::warning::No SIP_KEYSTORE_BASE64 secret set — building an unsigned debug APK instead."
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/sip.apk"
+          fi
+
+      - name: Remove keystore from runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sip-release.jks"
 
       - uses: actions/upload-artifact@v4
         with:
           name: sip-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ runner.temp }}/sip.apk
           if-no-files-found: error
+
+      # Only signed builds get published — an unsigned APK can't be installed,
+      # so releasing one would just hand her a dead link.
+      - name: Publish release
+        if: env.HAS_KEYSTORE == 'true' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          Open this page on the phone and tap **sip.apk** below to install.
+
+          Installing over an existing copy keeps all history and streaks.
+
+          Built from commit ${GITHUB_SHA:0:7}.
+          EOF
+          gh release create "v$SIP_VERSION_NAME" "$RUNNER_TEMP/sip.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Sip $SIP_VERSION_NAME" \
+            --notes-file "$RUNNER_TEMP/notes.md"
