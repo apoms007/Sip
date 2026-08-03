@@ -6,6 +6,11 @@ apply plugin: 'com.android.application'
 def storeFilePath = System.getenv("SIP_KEYSTORE_FILE")
 def hasReleaseSigning = storeFilePath != null && !storeFilePath.isEmpty() && file(storeFilePath).exists()
 
+// Resolved out here rather than inline below: `versionCode (expr).toInteger()`
+// parses as versionCode(expr) followed by .toInteger() on its null return.
+def sipVersionCode = ((System.getenv("SIP_VERSION_CODE") ?: "1") as String).toInteger()
+def sipVersionName = System.getenv("SIP_VERSION_NAME") ?: "1.0"
+
 android {
     namespace "com.mochisip.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,8 +21,8 @@ android {
         // Each build must carry a higher versionCode than the one already on her
         // phone or Android refuses to install it as an update. CI feeds the run
         // number in; a local build falls back to 1.
-        versionCode (System.getenv("SIP_VERSION_CODE") ?: "1").toInteger()
-        versionName System.getenv("SIP_VERSION_NAME") ?: "1.0"
+        versionCode sipVersionCode
+        versionName sipVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
