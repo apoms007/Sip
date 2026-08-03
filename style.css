@@ -7,6 +7,10 @@
   --deep:#d92f5e;
   --text:#4a2c38;
   --text-soft:#8f6474;
+  /* Text inputs keep a plain white box in both themes (never re-skinned for
+     dark mode), so their text needs its own color that stays a solid, readable
+     pink instead of following --text into a pale near-white in dark mode. */
+  --input-text:#d92f5e;
   --shadow:0 6px 20px rgba(217,47,94,.12);
   --ear-in:#ffc5de;
   font-family:ui-rounded,"SF Pro Rounded","Segoe UI Rounded",Nunito,"Trebuchet MS",-apple-system,sans-serif;
@@ -27,7 +31,7 @@ input{font-family:inherit;}
 .onboard-card{background:var(--card);border-radius:30px;padding:32px 24px;text-align:center;width:100%;box-shadow:var(--shadow);}
 .onboard-card h1{font-size:23px;}
 .onboard-card p{color:var(--text-soft);margin:4px 0 18px;font-weight:600;}
-#onboardName{width:100%;padding:13px 14px;border-radius:15px;border:2.5px solid var(--soft);font-size:16px;margin-bottom:16px;text-align:center;color:var(--text);}
+#onboardName{width:100%;padding:13px 14px;border-radius:15px;border:2.5px solid var(--soft);font-size:16px;margin-bottom:16px;text-align:center;color:var(--input-text);background:#fff;}
 #onboardName:focus{outline:none;border-color:var(--accent);}
 
 .btn-primary{background:var(--accent);color:#fff;padding:13px 20px;border-radius:17px;font-size:16px;font-weight:800;width:100%;box-shadow:0 4px 0 var(--deep);}
@@ -178,7 +182,7 @@ input{font-family:inherit;}
 .sheet-inner{background:#fff;width:100%;max-width:480px;margin:0 auto;border-radius:26px 26px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;}
 .sheet-inner h2{font-size:19px;font-weight:900;margin-bottom:14px;}
 .sheet-inner label{display:block;font-size:12px;color:var(--text-soft);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:13px;}
-.sheet-inner input[type=text],.sheet-inner input[type=number]{width:100%;padding:11px 12px;border-radius:13px;border:2.5px solid var(--soft);font-size:15px;margin-top:6px;color:var(--text);}
+.sheet-inner input[type=text],.sheet-inner input[type=number]{width:100%;padding:11px 12px;border-radius:13px;border:2.5px solid var(--soft);font-size:15px;margin-top:6px;color:var(--input-text);background:#fff;}
 .sheet-inner input:focus{outline:none;border-color:var(--accent);}
 .row-label{display:flex !important;align-items:center;gap:9px;text-transform:none;font-size:14px;}
 .row-label input{width:20px;height:20px;accent-color:var(--accent);}
